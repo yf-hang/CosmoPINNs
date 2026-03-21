@@ -1,6 +1,22 @@
+import os
+import tempfile
+import math
+
 import torch.optim as optim
 from torch.optim.lr_scheduler import CosineAnnealingLR
 import torch.nn.utils as nn_utils
+
+
+def _ensure_torch_compile_debug_dir():
+    env_name = "TORCH_COMPILE_DEBUG_DIR"
+    current = os.environ.get(env_name, "").strip()
+    if current:
+        return current, False
+
+    debug_root = os.path.join(tempfile.gettempdir(), "cosmopinns_torch_debug")
+    os.makedirs(debug_root, exist_ok=True)
+    os.environ[env_name] = debug_root
+    return debug_root, True
 
 
 def _grad_norm_l2(model):
@@ -39,6 +55,10 @@ def train_model_fixed_eps(
         if log_fn is not None:
             log_fn(msg)
 
+    torch_debug_dir, torch_debug_dir_set = _ensure_torch_compile_debug_dir()
+    if torch_debug_dir_set:
+        _emit(f"[{phase_name}] set TORCH_COMPILE_DEBUG_DIR={torch_debug_dir}")
+
     optimizer = optim.Adam(model.parameters(), lr=lr_init)
 
     cosine_scheduler = CosineAnnealingLR(
@@ -46,6 +66,9 @@ def train_model_fixed_eps(
         T_max=max(total_epochs - warmup_len, 1),
         eta_min=cosine_min_lr,
     )
+    lam1 = float(lam1)
+    lam2 = float(lam2)
+    lam2_initial = float(lam2)
 
     loss_tot_hist = []
     loss_cde_hist = []
@@ -93,6 +116,7 @@ def train_model_fixed_eps(
         if step % print_every == 0 or step == 1 or step == total_epochs:
             lr = optimizer.param_groups[0]["lr"]
             tot_val = float(loss_total.item())
+            cde_val = float(loss_cde.item())
             bc_val = float(loss_bc.item())
             bc_weighted_val = float(lam2) * bc_val
             if abs(tot_val) > 1e-30:
@@ -102,7 +126,7 @@ def train_model_fixed_eps(
             msg = (
                 f"[{step:04d}] "
                 f"tot={tot_val:.3e} | "
-                f"cde={loss_cde.item():.3e} | "
+                f"cde={cde_val:.3e} | "
                 f"bc={bc_val:.3e} | "
                 f"lam2*bc/tot={bc_over_tot_pct:.2f}% | "
                 f"lr={lr:.2e} | "
@@ -118,6 +142,18 @@ def train_model_fixed_eps(
                 )
             _emit(msg)
 
+    final_tot = float(loss_tot_hist[-1]) if loss_tot_hist else float("nan")
+    final_bc = float(loss_bc_hist[-1]) if loss_bc_hist else float("nan")
+    final_bc_weighted = float(lam2) * final_bc
+    if math.isfinite(final_tot) and abs(final_tot) > 1e-30:
+        final_bc_tot_pct = 100.0 * final_bc_weighted / final_tot
+    else:
+        final_bc_tot_pct = float("nan")
+    _emit(
+        f"[{phase_name}] final loss weights: "
+        f"lambda1={float(lam1):g}, lambda2={float(lam2):g}, "
+        f"lam2*bc/tot={final_bc_tot_pct:.2f}%"
+    )
     _emit(f" ------ {phase_name} fixed-eps training complete ------\n")
 
     return (
@@ -125,4 +161,11 @@ def train_model_fixed_eps(
         loss_tot_hist,
         loss_cde_hist,
         loss_bc_hist,
+        {
+            "lambda1_initial": float(lam1),
+            "lambda2_initial": float(lam2_initial),
+            "lambda1_final": float(lam1),
+            "lambda2_final": float(lam2),
+            "loss_weight_final_bc_tot_pct": float(final_bc_tot_pct),
+        },
     )
