@@ -1,0 +1,366 @@
+(* Content-type: application/vnd.wolfram.mathematica *)
+
+(*** Wolfram Notebook File ***)
+(* http://www.wolfram.com/nb *)
+
+(* CreatedBy='Mathematica 14.0' *)
+
+(*CacheID: 234*)
+(* Internal cache information:
+NotebookFileLineBreakTest
+NotebookFileLineBreakTest
+NotebookDataPosition[       158,          7]
+NotebookDataLength[     11752,        358]
+NotebookOptionsPosition[     10839,        338]
+NotebookOutlinePosition[     11237,        354]
+CellTagsIndexPosition[     11194,        351]
+WindowFrame->Normal*)
+
+(* Beginning of Notebook Content *)
+Notebook[{
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"(*", " ", "letters", " ", "*)"}], "\[IndentingNewLine]", 
+  RowBox[{"{", 
+   RowBox[{
+    RowBox[{"w1", "->", 
+     RowBox[{"x1", "+", "c"}]}], ",", 
+    RowBox[{"w2", "->", 
+     RowBox[{"x2", "+", "c"}]}], ",", 
+    RowBox[{"w3", "->", 
+     RowBox[{"x1", "-", "c"}]}], ",", 
+    RowBox[{"w4", "->", 
+     RowBox[{"x2", "-", "c"}]}], ",", 
+    RowBox[{"w5", "->", 
+     RowBox[{"x1", "+", "x2"}]}]}], "}"}]}]], "Input",
+ CellChangeTimes->{{3.982961532759554*^9, 
+  3.9829615425365887`*^9}},ExpressionUUID->"a7a718cf-440a-4c47-a515-\
+0bc4c0d3f3e9"],
+
+Cell[BoxData[
+ RowBox[{"(*", " ", 
+  RowBox[{"eps", " ", "=", " ", "0"}], " ", "*)"}]], "Input",
+ CellChangeTimes->{{3.982961521844555*^9, 
+  3.982961524027903*^9}},ExpressionUUID->"cb195884-ca0f-4abd-9ccc-\
+955b6bb718a2"],
+
+Cell[BoxData[{
+ RowBox[{
+  RowBox[{
+   RowBox[{"I1$", "[", "n_", "]"}], "=", 
+   RowBox[{
+    RowBox[{"-", 
+     FractionBox[
+      SuperscriptBox["\[Pi]", "2"], "6"]}], "+", 
+    RowBox[{"PolyLog", "[", 
+     RowBox[{"2", ",", 
+      FractionBox["w3", "w1"]}], "]"}], "+", 
+    RowBox[{"PolyLog", "[", 
+     RowBox[{"2", ",", 
+      FractionBox["w4", "w2"]}], "]"}], "-", 
+    RowBox[{"PolyLog", "[", 
+     RowBox[{"2", ",", 
+      FractionBox[
+       RowBox[{"w3", "*", "w4"}], 
+       RowBox[{"w1", "*", "w2"}]]}], "]"}]}]}], 
+  ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{
+   RowBox[{"I2$", "[", "n_", "]"}], "=", 
+   RowBox[{"Log", "[", 
+    FractionBox["w5", "w2"], "]"}]}], ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{
+   RowBox[{"I3$", "[", "n_", "]"}], "=", 
+   RowBox[{"Log", "[", 
+    FractionBox["w5", "w1"], "]"}]}], ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{
+   RowBox[{"I4$", "[", "n_", "]"}], "=", "1"}], ";"}]}], "Input",
+ CellChangeTimes->{{3.982961564815456*^9, 
+  3.982961604235091*^9}},ExpressionUUID->"1b83f150-a3a0-4f5e-b029-\
+a242cbc13616"],
+
+Cell[BoxData[
+ RowBox[{"(*", " ", 
+  RowBox[{"eps", " ", "=", " ", 
+   RowBox[{"-", "n"}]}], " ", "*)"}]], "Input",
+ CellChangeTimes->{{3.979321537936035*^9, 3.979321607496441*^9}, 
+   3.979322581486923*^9, {3.979336414341173*^9, 3.979336414558346*^9}, {
+   3.982961375816655*^9, 
+   3.982961386270225*^9}},ExpressionUUID->"54c6590f-4daa-4360-95d2-\
+dedf73623963"],
+
+Cell[BoxData[{
+ RowBox[{
+  RowBox[{"I1$Int", "[", "n_", "]"}], ":=", 
+  RowBox[{
+   FractionBox["1", 
+    RowBox[{
+     SuperscriptBox["w1", "n"], 
+     SuperscriptBox["w2", "n"]}]], "-", 
+   RowBox[{
+    FractionBox["1", 
+     SuperscriptBox["w5", "n"]], 
+    RowBox[{"(", 
+     RowBox[{
+      FractionBox[
+       RowBox[{"JacobiP", "[", 
+        RowBox[{
+         RowBox[{"n", "-", "1"}], ",", "n", ",", 
+         RowBox[{"-", "n"}], ",", 
+         RowBox[{"1", "-", 
+          RowBox[{"2", 
+           RowBox[{"w3", "/", "w5"}]}]}]}], "]"}], 
+       SuperscriptBox["w2", "n"]], "+", 
+      FractionBox[
+       RowBox[{"JacobiP", "[", 
+        RowBox[{
+         RowBox[{"n", "-", "1"}], ",", "n", ",", 
+         RowBox[{"-", "n"}], ",", 
+         RowBox[{"1", "-", 
+          RowBox[{"2", 
+           RowBox[{"w4", "/", "w5"}]}]}]}], "]"}], 
+       SuperscriptBox["w1", "n"]]}], ")"}]}]}]}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{
+   RowBox[{"I2$Int", "[", "n_", "]"}], ":=", 
+   RowBox[{
+    RowBox[{"-", 
+     FractionBox["w3", 
+      RowBox[{
+       SuperscriptBox["w2", "n"], " ", 
+       SuperscriptBox["w5", 
+        RowBox[{"2", "n"}]]}]]}], 
+    RowBox[{"Sum", "[", 
+     RowBox[{
+      RowBox[{
+       RowBox[{"Binomial", "[", 
+        RowBox[{
+         RowBox[{"n", "+", "k"}], ",", "k"}], "]"}], 
+       SuperscriptBox["w2", "k"], "*", 
+       SuperscriptBox["w5", 
+        RowBox[{"n", "-", "k", "-", "1"}]]}], ",", 
+      RowBox[{"{", 
+       RowBox[{"k", ",", "0", ",", 
+        RowBox[{"n", "-", "1"}]}], "}"}]}], "]"}]}]}], 
+  ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{
+   RowBox[{"I3$Int", "[", "n_", "]"}], ":=", 
+   RowBox[{
+    RowBox[{"-", 
+     FractionBox["w4", 
+      RowBox[{
+       SuperscriptBox["w1", "n"], " ", 
+       SuperscriptBox["w5", 
+        RowBox[{"2", "n"}]]}]]}], 
+    RowBox[{"Sum", "[", 
+     RowBox[{
+      RowBox[{
+       RowBox[{"Binomial", "[", 
+        RowBox[{
+         RowBox[{"n", "+", "k"}], ",", "k"}], "]"}], 
+       SuperscriptBox["w1", "k"], "*", 
+       SuperscriptBox["w5", 
+        RowBox[{"n", "-", "k", "-", "1"}]]}], ",", 
+      RowBox[{"{", 
+       RowBox[{"k", ",", "0", ",", 
+        RowBox[{"n", "-", "1"}]}], "}"}]}], "]"}]}]}], 
+  ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{
+   RowBox[{"I4$Int", "[", "n_", "]"}], ":=", 
+   FractionBox[
+    RowBox[{"Binomial", "[", 
+     RowBox[{
+      RowBox[{"2", "n"}], ",", "n"}], "]"}], 
+    SuperscriptBox["w5", 
+     RowBox[{"2", "n"}]]]}], ";"}]}], "Input",
+ CellChangeTimes->{{3.976054460253796*^9, 3.9760546620310173`*^9}, {
+   3.9760548275633907`*^9, 3.976054829745116*^9}, {3.976054871042058*^9, 
+   3.976054932615186*^9}, {3.976054981192171*^9, 3.976055038393353*^9}, {
+   3.976055258158285*^9, 3.97605525958657*^9}, {3.976183798423727*^9, 
+   3.976183830230174*^9}, {3.979321516500099*^9, 3.9793215167328258`*^9}, {
+   3.979336716732296*^9, 3.97933672469981*^9}, {3.979379747739319*^9, 
+   3.979379757560664*^9}, {3.982444582413199*^9, 3.982444583949766*^9}, 
+   3.982444720827365*^9, {3.9824474184960318`*^9, 3.982447418908443*^9}, {
+   3.982452092783158*^9, 3.982452093116539*^9}, {3.9829613519418087`*^9, 
+   3.9829613557591248`*^9}, {3.98296152835305*^9, 
+   3.9829615510027637`*^9}},ExpressionUUID->"86a64388-ea3c-463c-803f-\
+758bbac328dd"],
+
+Cell[BoxData[
+ RowBox[{"(*", " ", 
+  RowBox[{"eps", " ", "=", " ", 
+   RowBox[{"+", "n"}]}], " ", "*)"}]], "Input",
+ CellChangeTimes->{{3.979321537936035*^9, 3.979321607496441*^9}, 
+   3.979322581486923*^9, {3.979336414341173*^9, 3.979336414558346*^9}, {
+   3.982961375816655*^9, 
+   3.982961378601429*^9}},ExpressionUUID->"ae8c9264-cd64-4dda-a81d-\
+be40c13c3b75"],
+
+Cell[BoxData[{
+ RowBox[{
+  RowBox[{
+   RowBox[{
+    RowBox[{"I2$Int", "[", "n_", "]"}], ":=", 
+    RowBox[{
+     RowBox[{
+      FractionBox[
+       SuperscriptBox[
+        RowBox[{"(", 
+         RowBox[{"-", "1"}], ")"}], 
+        RowBox[{"n", "+", "1"}]], "2"], 
+      SuperscriptBox["w2", "n"], " ", 
+      SuperscriptBox["w3", "n"]}], "+", " ", 
+     RowBox[{
+      FractionBox[
+       RowBox[{
+        SuperscriptBox["w2", "n"], 
+        SuperscriptBox["w3", "n"]}], "2"], " ", 
+      RowBox[{"Log", "[", 
+       RowBox[{"w3", "/", "w2"}], "]"}]}], "+", 
+     RowBox[{
+      FractionBox["1", 
+       RowBox[{"Binomial", "[", 
+        RowBox[{
+         RowBox[{"2", "n"}], ",", "n"}], "]"}]], "*", 
+      RowBox[{"Sum", "[", 
+       RowBox[{
+        RowBox[{
+         RowBox[{"(", 
+          RowBox[{"1", "/", "m"}], ")"}], " ", 
+         RowBox[{"(", 
+          RowBox[{
+           RowBox[{
+            RowBox[{"Binomial", "[", 
+             RowBox[{
+              RowBox[{
+               RowBox[{"2", "n"}], "-", "1"}], ",", 
+              RowBox[{"n", "+", "m", "-", "1"}]}], "]"}], " ", 
+            SuperscriptBox["w3", 
+             RowBox[{"n", "+", "m"}]], " ", 
+            SuperscriptBox["w2", 
+             RowBox[{"n", "-", "m"}]]}], "-", 
+           RowBox[{
+            RowBox[{"Binomial", "[", 
+             RowBox[{
+              RowBox[{
+               RowBox[{"2", "n"}], "-", "1"}], ",", 
+              RowBox[{"n", "-", "m", "-", "1"}]}], "]"}], " ", 
+            SuperscriptBox["w2", 
+             RowBox[{"n", "+", "m"}]], " ", 
+            SuperscriptBox["w3", 
+             RowBox[{"n", "-", "m"}]]}]}], ")"}]}], ",", 
+        RowBox[{"{", 
+         RowBox[{"m", ",", "1", ",", "n"}], "}"}]}], "]"}]}]}]}], ";"}], 
+  "\[IndentingNewLine]"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{
+   RowBox[{
+    RowBox[{"I3$Int", "[", "n_", "]"}], ":=", 
+    RowBox[{
+     RowBox[{
+      FractionBox[
+       SuperscriptBox[
+        RowBox[{"(", 
+         RowBox[{"-", "1"}], ")"}], 
+        RowBox[{"n", "+", "1"}]], "2"], 
+      SuperscriptBox["w1", "n"], " ", 
+      SuperscriptBox["w4", "n"]}], "+", " ", 
+     RowBox[{
+      FractionBox[
+       RowBox[{
+        SuperscriptBox["w1", "n"], 
+        SuperscriptBox["w4", "n"]}], "2"], " ", 
+      RowBox[{"Log", "[", 
+       RowBox[{"w4", "/", "w1"}], "]"}]}], "+", 
+     RowBox[{
+      FractionBox["1", 
+       RowBox[{"Binomial", "[", 
+        RowBox[{
+         RowBox[{"2", "n"}], ",", "n"}], "]"}]], "*", 
+      RowBox[{"Sum", "[", 
+       RowBox[{
+        RowBox[{
+         RowBox[{"(", 
+          RowBox[{"1", "/", "m"}], ")"}], " ", 
+         RowBox[{"(", 
+          RowBox[{
+           RowBox[{
+            RowBox[{"Binomial", "[", 
+             RowBox[{
+              RowBox[{
+               RowBox[{"2", " ", "n"}], "-", "1"}], ",", 
+              RowBox[{"n", "+", "m", "-", "1"}]}], "]"}], " ", 
+            SuperscriptBox["w4", 
+             RowBox[{"n", "+", "m"}]], " ", 
+            SuperscriptBox["w1", 
+             RowBox[{"n", "-", "m"}]]}], "-", 
+           RowBox[{
+            RowBox[{"Binomial", "[", 
+             RowBox[{
+              RowBox[{
+               RowBox[{"2", "n"}], "-", "1"}], ",", 
+              RowBox[{"n", "-", "m", "-", "1"}]}], "]"}], " ", 
+            SuperscriptBox["w1", 
+             RowBox[{"n", "+", "m"}]], " ", 
+            SuperscriptBox["w4", 
+             RowBox[{"n", "-", "m"}]]}]}], ")"}]}], ",", 
+        RowBox[{"{", 
+         RowBox[{"m", ",", "1", ",", "n"}], "}"}]}], "]"}]}]}]}], ";"}], 
+  "\[IndentingNewLine]"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{
+   RowBox[{"I4$Int", "[", "n_", "]"}], ":=", 
+   FractionBox[
+    SuperscriptBox["w5", 
+     RowBox[{"2", "n"}]], 
+    RowBox[{"n", "*", 
+     RowBox[{"Binomial", "[", 
+      RowBox[{
+       RowBox[{"2", "n"}], ",", "n"}], "]"}]}]]}], 
+  "\[IndentingNewLine]"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{
+   RowBox[{"I1$Int", "[", "n_", "]"}], ":=", " ", 
+   RowBox[{
+    RowBox[{
+     SuperscriptBox["w1", "n"], 
+     SuperscriptBox["w2", "n"]}], "+", 
+    RowBox[{"I2$Int", "[", "n", "]"}], "+", 
+    RowBox[{"I3$Int", "[", "n", "]"}], "-", 
+    RowBox[{"I4$Int", "[", "n", "]"}]}]}], ";"}]}], "Input",
+ CellChangeTimes->{{3.982491676770402*^9, 3.982491734079153*^9}, 
+   3.982882915992304*^9},ExpressionUUID->"0d9c86c2-f3e0-42c9-8e07-\
+8715c56668b1"]
+},
+WindowSize->{900, 579},
+WindowMargins->{{Automatic, 111}, {43, Automatic}},
+FrontEndVersion->"14.0 for Mac OS X x86 (64-bit) (December 12, 2023)",
+StyleDefinitions->"Default.nb",
+ExpressionUUID->"0b6ce59d-f0a6-45ad-8aeb-e3878771b5ad"
+]
+(* End of Notebook Content *)
+
+(* Internal cache information *)
+(*CellTagsOutline
+CellTagsIndex->{}
+*)
+(*CellTagsIndex
+CellTagsIndex->{}
+*)
+(*NotebookFileOutline
+Notebook[{
+Cell[558, 20, 584, 17, 52, "Input",ExpressionUUID->"a7a718cf-440a-4c47-a515-0bc4c0d3f3e9"],
+Cell[1145, 39, 222, 5, 30, "Input",ExpressionUUID->"cb195884-ca0f-4abd-9ccc-955b6bb718a2"],
+Cell[1370, 46, 1087, 35, 152, "Input",ExpressionUUID->"1b83f150-a3a0-4f5e-b029-a242cbc13616"],
+Cell[2460, 83, 364, 8, 30, "Input",ExpressionUUID->"54c6590f-4daa-4360-95d2-dedf73623963"],
+Cell[2827, 93, 3285, 97, 178, "Input",ExpressionUUID->"86a64388-ea3c-463c-803f-758bbac328dd"],
+Cell[6115, 192, 364, 8, 30, "Input",ExpressionUUID->"ae8c9264-cd64-4dda-a81d-be40c13c3b75"],
+Cell[6482, 202, 4353, 134, 359, "Input",ExpressionUUID->"0d9c86c2-f3e0-42c9-8e07-8715c56668b1"]
+}
+]
+*)
+
