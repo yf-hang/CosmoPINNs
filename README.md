@@ -4,17 +4,17 @@ CosmoPINNs is a research codebase for solving canonical differential equations (
 
 The project is organized as a three-phase hierarchy:
 
-- `Phase 1`: two-site chain
-- `Phase 2`: one-loop bubble, trained by transfer learning from matched Phase-1 checkpoints
-- `Phase 3`: two-loop sunset, also initialized from matched Phase-1 checkpoints
+- `Phase 0`: two-site chain
+- `Phase 1`: one-loop bubble, trained by transfer learning from matched Phase-0 checkpoints
+- `Phase 2`: two-loop sunset, also initialized from matched Phase-0 checkpoints
 
 ## What This Repository Contains
 
 - `main.py`: main training entry point for fixed-`epsilon` runs
 - `lib/`: neural-network models, losses, and training utilities
-- `two_site_chain/`: Phase-1 problem definition
-- `tl_two_site_bubble/`: Phase-2 transfer-learning setup
-- `tl_two_site_sunset/`: Phase-3 transfer-learning setup
+- `two_site_chain/`: Phase-0 problem definition
+- `tl_two_site_bubble/`: Phase-1 transfer-learning setup
+- `tl_two_site_sunset/`: Phase-2 transfer-learning setup
 - `plot_tools/`: plotting and post-training diagnostic utilities
 
 ## Main Features
