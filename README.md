@@ -38,6 +38,6 @@ python main.py
 ```
 
 ## Notes
-- The formulation implemented in this codebase originate from [arXiv:2410.17192](https://arxiv.org/abs/2410.17192), where the CDEs for the relevant two-site loop level cosmological wavefunction integrals were first derived and analyzed. We ask that papers using, discussing, or extending this formulation cite [arXiv:2410.17192](https://arxiv.org/abs/2410.17192) as the original work.
+- The formulation implemented in this codebase originate from [arXiv:2410.17192](https://arxiv.org/abs/2410.17192), where the kinematic flow and CDEs for the relevant two-site loop-level cosmological wavefunction integrals were first analyzed and derived. We ask that papers using, discussing, or extending this formulation cite [arXiv:2410.17192](https://arxiv.org/abs/2410.17192) as the original work.
 - The current production workflow is configuration-driven rather than packaged as a pip module.
 - This repository is intended as research code, so some paths and runtime options are tuned for local or batch environments.
