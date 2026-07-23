@@ -29,7 +29,7 @@ loop-level topology.
 
 The default numerical setup follows the manuscript:
 
-| $\ell$ | Collocation domain | Fixed scale | Collocation points | Boundary points | Epochs |
+| Loop order $\ell$ | Collocation domain | Fixed scale | Collocation points | Boundary points | Epochs |
 | --- | --- | ---: | ---: | ---: | ---: |
 | 0 | `[20,30] x [20,30]` | `c0 = 15` | `5e4` | `5e3` | `6000` |
 | 1 | `[30,40] x [30,40] x [15,20]` | `c1 = 5` | `1e5` | `1e4` | `8000` |
@@ -43,9 +43,7 @@ The benchmark values of $\varepsilon$ are:
 | 1 | $\varepsilon = \{0, -1, -2, -3\}$ |
 | 2 | $\varepsilon = \{0, -1, -4, +5\}$ |
 
-Here $\varepsilon = 0$ and $\varepsilon = -1$ are corresponding to the de Sitter and flat-space backgrounds.
-The remaining values correspond to the radiation- and matter- dominated points used for the
-one- and two-loop systems.
+Note that $\varepsilon$ is the twist factor defined in the power-law cosmology. Here $\varepsilon = 0$ and $\varepsilon = -1$ are corresponding to the de Sitter (dS) and flat-space backgrounds. The remaining values correspond to the radiation-dominated (RD) and matter-dominated (MD) backgrounds used for the one- and two-loop systems.
 
 ## Repository Layout
 
