@@ -1,13 +1,8 @@
 # CosmoPINNs
 
-CosmoPINNs is a framework for solving canonical differential equations
-(CDEs) for cosmological wavefunction coefficients with physics-informed neural
-networks (PINNs). The project studies the two-site family of cosmological
-wavefunction integrals in power-law FRW backgrounds and uses transfer learning
-from a lower-loop source topology to higher-loop targets.
+CosmoPINNs is a physics-informed neural network (PINN) framework for solving the canonical differential equations satisfied by cosmological wavefunction coefficients. The project focuses on the two-site family of cosmological wavefunction integrals in general power-law Friedmann–Robertson-Walker (FRW) backgrounds. It also incorporates transfer learning, using models trained on lower-dimensional baseline systems to initialize and improve the training of higher-dimensional target systems. This approach allows the model to reuse previously learned structures, helping reduce training difficulty and improve the efficiency and stability of solving more complex cosmological systems.
 
 Result plots are also collected at:
-
 <https://yf-hang.github.io/CosmoPINNs/>
 
 ## Overview
