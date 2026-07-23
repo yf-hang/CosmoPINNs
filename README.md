@@ -1,15 +1,12 @@
 # CosmoPINNs
 
-CosmoPINNs is a physics-informed neural network (PINN) framework for solving the canonical differential equations satisfied by cosmological wavefunction coefficients. The project focuses on the two-site family of cosmological wavefunction integrals in general power-law Friedmann–Robertson-Walker (FRW) backgrounds. It also incorporates transfer learning, using models trained on lower-dimensional baseline systems to initialize and improve the training of higher-dimensional target systems. This approach allows the model to reuse previously learned structures, helping reduce training difficulty and improve the efficiency and stability of solving more complex cosmological systems.
+CosmoPINNs is a physics-informed neural network (PINN) framework for solving the canonical differential equations satisfied by cosmological wavefunction coefficients. The project focuses on the two-site family of cosmological wavefunction integrals in general power-law Friedmann–Robertson-Walker (FRW) backgrounds. It also incorporates transfer learning strategy, using models trained on lower-dimensional baseline systems (tree-level graphs) to initialize and improve the training of higher-dimensional target systems (loop-level graphs). This approach allows the model to reuse previously learned structures, helping reduce training difficulty and improve the efficiency and stability of solving more complex cosmological systems.
 
-Result plots are also collected at:
-<https://yf-hang.github.io/CosmoPINNs/>
+Some of the results are collected at: <https://yf-hang.github.io/CosmoPINNs/>.
 
 ## Overview
 
-The core idea is to approximate the vector of master integrals (MIs) by a neural
-network and train it directly against the canonical differential system. The
-loss combines:
+The core idea is to approximate the vector of master integrals (MIs) by a neural network and train it directly against the canonical differential system. The loss combines:
 
 - loss of canonical differential equation (CDE) evaluated at collocation points;
 - analytic boundary and anchor data that fix integration constants and
