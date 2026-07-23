@@ -7,8 +7,8 @@ Some of the results are collected at: <https://yf-hang.github.io/CosmoPINNs/>.
 ## Overview
 
 <p align="center">
-  <img src="figure1.png" alt="Phase-1 model" width="48%">
-  <img src="figure2.png" alt="Target model" width="48%">
+  <img src="nn_fig.png" alt="Basic NN" width="48%">
+  <img src="nn_transfer_fig.png" alt="Transfer Learning NN" width="48%">
 </p>
 
 The core idea is to approximate the vector of master integrals (MIs) by a neural network and train it directly against the canonical differential system. The loss combines:
