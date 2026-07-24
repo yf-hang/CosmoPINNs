@@ -27,10 +27,8 @@ Some of the results are collected at: <https://yf-hang.github.io/CosmoPINNs/>.
 
 The core idea is to approximate the vector of master integrals (MIs) by a neural network and train it directly against the canonical differential system. The loss combines:
 
-- loss of canonical differential equation (CDE) evaluated at collocation points;
-- analytic boundary and anchor data that fix integration constants and
-  normalization;
-- post-training diagnostics against analytic solutions.
+- Loss of canonical differential equation (CDE) evaluated at collocation points $L_{\mathrm{CDE}}$.
+- Analytic boundary and anchor data $L_{\mathrm{BC}}$.
 
 The code implements a three-phase hierarchy:
 
