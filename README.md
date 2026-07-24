@@ -32,13 +32,15 @@ The core idea is to approximate the vector of master integrals (MIs) by a neural
 
 The code implements a three-phase hierarchy:
 
-| Phase | Topology | Inputs | Re MI dim | Training role |
+| Phase | Topology | Inputs ($u_k$) dim | Outputs (Re($T_j$)) dim | Training role |
 | --- | --- | --- | ---: | --- |
-| Phase 0 | chain ($\ell = 0$) | `(u1, u2)` | 4 | source model |
-| Phase 1 | one-loop bubble ($\ell = 1$) | `(u1, u2, u3)` | 10 | transfer target |
-| Phase 2 | two-loop sunset ($\ell = 2$) | `(u1, u2, u3, u4)` | 22 | transfer target |
+| Phase 0 | chain ($\ell = 0$) | 2 | 4 | source model |
+| Phase 1 | one-loop bubble ($\ell = 1$) | 3 | 10 | transfer target |
+| Phase 2 | two-loop sunset ($\ell = 2$) | 4 | 22 | transfer target |
 
-For transfer learning, the Phase-0 hidden representation is copied into the target model, frozen, and paired with new input and output layers matching the loop-level topology.
+in dim vs. out dim: <https://yf-hang.github.io/CosmoPINNs/nn_dim.html>
+
+For transfer learning, the Phase-0 hidden layers are copied into the target model, frozen, and paired with new input and output layers matching the loop-level topology.
 
 ## Scientific Setup
 
