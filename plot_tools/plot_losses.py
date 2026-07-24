@@ -35,7 +35,7 @@ def get_results_root_name() -> str:
 def get_nested_save_dir(
     save_dir: str,
     cy: float,
-    phase: int = 1,
+    phase: int = 0,
     phase_tag: str = None,
     create_dir: bool = True,
 ):
@@ -103,9 +103,9 @@ def plot_losses(
     title,
     cy,
     save_dir="1_losses",
-    fname="P1_loss_all.png",
-    fname2="P1_loss_total.png",
-    phase=1,
+    fname="P0_loss_all.png",
+    fname2="P0_loss_total.png",
+    phase=0,
     phase_tag=None,
 ):
 

@@ -12,7 +12,7 @@ def plot_error_dis(
     model,
     x_coll,
     function_target,
-    phase_name="P1",
+    phase_name="P0",
     eps_value=None,
     cy=None,
     cy_loop=None,
@@ -34,11 +34,11 @@ def plot_error_dis(
         phase = int(phase_name_u[1:])
     else:
         raise ValueError(
-            f"Unsupported phase_name={phase_name!r}. Expected pattern like 'P1', 'P2', 'P3'."
+            f"Unsupported phase_name={phase_name!r}. Expected pattern like 'P0', 'P1', 'P2'."
         )
 
     phase_label = f"P{phase}"
-    cy_for_folder = cy if phase == 1 else cy_loop
+    cy_for_folder = cy if phase == 0 else cy_loop
     if cy_for_folder is None:
         raise ValueError(
             f"Please provide cy (for {phase_label}) or cy_loop (for transfer phases) for folder naming."
@@ -441,12 +441,8 @@ def plot_error_dis(
         bins_norm_abs = np.logspace(-8, 1, 60)
         bins_norm_rel = np.logspace(-8, 1, 60)
 
-        if phase == 1:
-            title_l1 = rf"P1: $\vec{{I}}$ L1 error"
-            title_l2 = rf"P1: $\vec{{I}}$ L2 error"
-        else:
-            title_l1 = rf"P2: $\vec{{I}}$ L1 error"
-            title_l2 = rf"P2: $\vec{{I}}$ L2 error"
+        title_l1 = rf"P{phase}: $\vec{{I}}$ L1 error"
+        title_l2 = rf"P{phase}: $\vec{{I}}$ L2 error"
 
         # L1 norms across basis, per sample
         l1_abs_re = np.abs(diff_re).sum(axis=1)

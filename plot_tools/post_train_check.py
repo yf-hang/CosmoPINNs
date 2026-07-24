@@ -10,7 +10,7 @@ def post_train_check(
     eps_global,
     compute_function_target_from_xcoll,
     precomputed_true=None,
-    phase_name="P1",
+    phase_name="P0",
     pred_scale=1.0,
     log_fn=None,
     output_part="both",
