@@ -33,7 +33,7 @@ The core idea is to approximate the vector of master integrals (MIs) by a neural
 The code implements a three-phase hierarchy:
 
 | Phase | Topology | Inputs ($u_k$) dim | Outputs (Re($I_j$)) dim | Training role |
-| --- | --- | --- | --- | --- |
+| --- | --- | ---: | ---: | --- |
 | Phase 0 | chain ($\ell = 0$) | 2 | 4 | source model |
 | Phase 1 | one-loop bubble ($\ell = 1$) | 3 | 10 | transfer target |
 | Phase 2 | two-loop sunset ($\ell = 2$) | 4 | 22 | transfer target |
@@ -66,15 +66,22 @@ Note that $\varepsilon$ is the twist factor defined in the power-law cosmology. 
 
 ```text
 |-- main.py                         # Main configuration-driven training entry point
-|-- config.json                     # Default production/run configuration
+|-- config.json                     # Default run configuration
 |-- lib/
 |   |-- models.py                   # PINN and transfer-PINN modules
-|   |-- loss.py                     # CDE residual and boundary losses
-|   `-- train.py                    # Optimizer, warmup, cosine schedule
-|-- two_site_chain/                 # Phase-1 analytic targets and CDE matrices
-|-- tl_two_site_bubble/             # Phase-2 one-loop transfer target
-|-- tl_two_site_sunset/             # Phase-3 two-loop transfer target
+|   |-- loss.py                     # CDE residual and BC losses
+|   |-- train.py                    # Optimizer, warmup, cosine schedule
+|-- two_site_chain/                 # Phase-0 analytic targets and CDE matrices
+    |-- coll_bc_1loop.py            # Collocatoin and boundary data
+    |-- coll_mat_1loop.py           # Generation connection matrix
+    |-- mat_data_1loop.py           # Structure of connection matrix
+    |-- sol_1loop.py                # Analytic solutions
+|-- tl_two_site_bubble/             # Phase-1 one-loop transfer target
+|-- tl_two_site_sunset/             # Phase-2 two-loop transfer target
 |-- plot_tools/                     # Per-run plotting and post-training checks
+    |-- plot_loss.py                
+    |-- plot_error.py
+    |-- post_train_check.py
 |-- results/                        # Generated checkpoints, logs, plots, caches
 ```
 
