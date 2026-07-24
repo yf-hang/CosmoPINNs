@@ -145,7 +145,7 @@ def _polylog2_complex_np(z):
     return _scipy_spence(1.0 - z_arr)
 
 
-def _fast_p3_target_eps0(
+def _fast_p2_target_eps0(
     x_coll: torch.Tensor,
     *,
     cy_val: float,
@@ -268,7 +268,7 @@ def _fast_p3_target_eps0(
     return torch.tensor(function_concat, dtype=torch.float64, device=x_coll.device)
 
 
-def _fast_p3_target_positive_int_re(
+def _fast_p2_target_positive_int_re(
     x_coll: torch.Tensor,
     *,
     cy_val: float,
@@ -349,7 +349,7 @@ def _fast_p3_target_positive_int_re(
     return out[:, : int(n_basis)]
 
 
-def _fast_p3_target_negative_int_re(
+def _fast_p2_target_negative_int_re(
     x_coll: torch.Tensor,
     *,
     cy_val: float,
@@ -512,7 +512,7 @@ def compute_function_target_from_xcoll_2loop(
         x_tensor = torch.as_tensor(x_coll, dtype=torch.float32)
 
     if abs(float(eps_val)) < _EPS_TOL and _scipy_spence is not None:
-        return _fast_p3_target_eps0(
+        return _fast_p2_target_eps0(
             x_tensor,
             cy_val=float(cy_val),
             n_basis=n_basis,
@@ -522,7 +522,7 @@ def compute_function_target_from_xcoll_2loop(
     if output_part == "re":
         n_pos = eps_to_n_pos_int(float(eps_val))
         if n_pos is not None:
-            fast = _fast_p3_target_positive_int_re(
+            fast = _fast_p2_target_positive_int_re(
                 x_tensor,
                 cy_val=float(cy_val),
                 eps_val=float(eps_val),
@@ -532,7 +532,7 @@ def compute_function_target_from_xcoll_2loop(
 
         n_neg = eps_to_n_int(float(eps_val))
         if n_neg is not None:
-            fast = _fast_p3_target_negative_int_re(
+            fast = _fast_p2_target_negative_int_re(
                 x_tensor,
                 cy_val=float(cy_val),
                 eps_val=float(eps_val),
