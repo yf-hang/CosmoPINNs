@@ -25,7 +25,7 @@ class PinnModel(nn.Module):
         n_basis = config.n_basis
         activation_name = config.activation_f
         if output_part is None:
-            output_part = getattr(config, "phase1_output_part", "both")
+            output_part = getattr(config, "phase0_output_part", "both")
         output_part = _normalize_output_part(output_part)
 
         activation = self.get_activation(activation_name)
@@ -54,14 +54,14 @@ class PinnModel(nn.Module):
         raise ValueError(f"Unsupported activation function: {name}")
 
 # -------------------------------------------------------------
-#  Transfer learning PINN model (Phase 2) 2-site 1-loop bubble
+#  Transfer learning PINN model for Phase 1/2 loop targets
 # -------------------------------------------------------------
 class TransferPinnModel(nn.Module):
 
     def __init__(
         self,
         config,
-        phase1_model,
+        phase0_model,
         freeze_core=True,
         output_part=None,
         target_in_dim=3,
@@ -69,22 +69,22 @@ class TransferPinnModel(nn.Module):
     ):
         super().__init__()
 
-        if not hasattr(phase1_model, "net"):
-            raise ValueError("phase1_model must provide a '.net' Sequential for transfer learning.")
+        if not hasattr(phase0_model, "net"):
+            raise ValueError("phase0_model must provide a '.net' Sequential for transfer learning.")
 
-        phase1_layers = list(phase1_model.net.children())
-        if len(phase1_layers) < 3:
-            raise ValueError("phase1_model.net must have at least [input, core, output] layers.")
+        phase0_layers = list(phase0_model.net.children())
+        if len(phase0_layers) < 3:
+            raise ValueError("phase0_model.net must have at least [input, core, output] layers.")
 
-        phase1_in = phase1_layers[0]
-        if not isinstance(phase1_in, nn.Linear):
-            raise ValueError("Expected the first phase1 layer to be nn.Linear.")
-        if phase1_in.in_features not in (2, 3):
+        phase0_in = phase0_layers[0]
+        if not isinstance(phase0_in, nn.Linear):
+            raise ValueError("Expected the first phase0 layer to be nn.Linear.")
+        if phase0_in.in_features not in (2, 3):
             raise ValueError(
-                f"Expected phase1 input dim in {{2,3}}, got {phase1_in.in_features}."
+                f"Expected phase0 input dim in {{2,3}}, got {phase0_in.in_features}."
             )
 
-        hidden = phase1_in.out_features
+        hidden = phase0_in.out_features
 
         target_in_dim = int(target_in_dim)
         if target_in_dim <= 0:
@@ -94,14 +94,14 @@ class TransferPinnModel(nn.Module):
         # No activation here because transferred core starts with original first activation.
         self.input_layer = nn.Linear(target_in_dim, hidden)
 
-        # Copy all middle modules from phase 1 (drop first and last), then freeze.
-        self.core = nn.Sequential(*[copy.deepcopy(m) for m in phase1_layers[1:-1]])
+        # Copy all middle modules from phase 0 (drop first and last), then freeze.
+        self.core = nn.Sequential(*[copy.deepcopy(m) for m in phase0_layers[1:-1]])
         if freeze_core:
             for p in self.core.parameters():
                 p.requires_grad = False
 
         if output_part is None:
-            output_part = getattr(config, "phase2_output_part", "both")
+            output_part = getattr(config, "phase1_output_part", "both")
         output_part = _normalize_output_part(output_part)
 
         if target_n_basis is None:
@@ -115,21 +115,21 @@ class TransferPinnModel(nn.Module):
         self.output_part = output_part
         self.out_dim = int(out_dim)
 
-        # Transfer initialization: reuse phase-1 input weights for x1/x2;
+        # Transfer initialization: reuse phase-0 input weights for x1/x2;
         # initialize extra dims with mean(x1,x2) weights.
         with torch.no_grad():
             self.input_layer.weight.zero_()
-            copy_cols = min(2, phase1_in.in_features, target_in_dim)
+            copy_cols = min(2, phase0_in.in_features, target_in_dim)
             if copy_cols > 0:
-                self.input_layer.weight[:, :copy_cols].copy_(phase1_in.weight[:, :copy_cols])
+                self.input_layer.weight[:, :copy_cols].copy_(phase0_in.weight[:, :copy_cols])
             if target_in_dim > copy_cols:
                 if copy_cols > 0:
-                    fill_w = phase1_in.weight[:, :copy_cols].mean(dim=1)
+                    fill_w = phase0_in.weight[:, :copy_cols].mean(dim=1)
                 else:
                     fill_w = torch.zeros_like(self.input_layer.bias)
                 for j in range(copy_cols, target_in_dim):
                     self.input_layer.weight[:, j].copy_(fill_w)
-            self.input_layer.bias.copy_(phase1_in.bias)
+            self.input_layer.bias.copy_(phase0_in.bias)
 
     def forward(self, x):
         x = self.input_layer(x)

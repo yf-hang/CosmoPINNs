@@ -45,7 +45,7 @@ def train_model_fixed_eps(
     lam2,
     cosine_min_lr=0.0,
     print_every=100,
-    phase_name="P1",
+    phase_name="P0",
     log_fn=None,
     use_grad_norm_probe=False,
     grad_clip_max_norm=10.0,
