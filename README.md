@@ -72,8 +72,8 @@ Note that $\varepsilon$ is the twist factor defined in the power-law cosmology. 
 |   |-- loss.py                     # CDE residual and BC losses
 |   |-- train.py                    # Optimizer, warmup, cosine schedule
 |-- two_site_chain/                 # Phase-0 analytic targets and CDE matrices
-    |-- coll_bc_1loop.py            # Collocatoin and boundary data
-    |-- coll_mat_1loop.py           # Generation connection matrix
+    |-- coll_bc_1loop.py            # Collocation and boundary data
+    |-- coll_mat_1loop.py           # Generation of connection matrix
     |-- mat_data_1loop.py           # Structure of connection matrix
     |-- sol_1loop.py                # Analytic solutions
 |-- tl_two_site_bubble/             # Phase-1 one-loop transfer target
