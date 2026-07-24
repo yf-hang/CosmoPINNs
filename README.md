@@ -7,8 +7,8 @@ Some of the results are collected at: <https://yf-hang.github.io/CosmoPINNs/>.
 ## Overview
 
 <p align="center">
-  <img src="nn_fig.png" alt="Basic NN" width="48%">
-  <img src="nn_transfer_fig.png" alt="Transfer Learning NN" width="48%">
+  <img src="nn_fig.png" alt="Basic NN" width="45%">
+  <img src="nn_transfer_fig.png" alt="Transfer Learning NN" width="45%">
 </p>
 
 The core idea is to approximate the vector of master integrals (MIs) by a neural network and train it directly against the canonical differential system. The loss combines:
@@ -20,11 +20,11 @@ The core idea is to approximate the vector of master integrals (MIs) by a neural
 
 The code implements a three-phase hierarchy:
 
-| Phase | Topology | Inputs | Real-sector MI dimension | Training role |
+| Phase | Topology | Inputs | Re MI dim | Training role |
 | --- | --- | --- | ---: | --- |
-| Phase 1 | two-site chain, $\ell = 0$ | `(u1, u2)` | 4 | source model |
-| Phase 2 | one-loop bubble, $\ell = 1$ | `(u1, u2, u3)` | 10 | transfer target |
-| Phase 3 | two-loop sunset, $\ell = 2$ | `(u1, u2, u3, u4)` | 22 | transfer target |
+| Phase 0 | chain, $\ell = 0$ | `(u1, u2)` | 4 | source model |
+| Phase 1 | one-loop bubble, $\ell = 1$ | `(u1, u2, u3)` | 10 | transfer target |
+| Phase 2 | two-loop sunset, $\ell = 2$ | `(u1, u2, u3, u4)` | 22 | transfer target |
 
 For transfer learning, the Phase-1 hidden representation is copied into the
 target model, frozen, and paired with new input and output layers matching the
@@ -53,7 +53,6 @@ Note that $\varepsilon$ is the twist factor defined in the power-law cosmology. 
 ## Repository Layout
 
 ```text
-.
 |-- main.py                         # Main configuration-driven training entry point
 |-- config.json                     # Default production/run configuration
 |-- lib/
