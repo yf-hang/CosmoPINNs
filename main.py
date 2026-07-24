@@ -119,7 +119,7 @@ def _output_part_tag(output_part: str):
     return None
 
 
-def _slice_phase1_target_by_part(
+def _slice_phase0_target_by_part(
     tensor: torch.Tensor,
     *,
     n_basis: int,
@@ -388,7 +388,7 @@ def _load_model_checkpoint(model: torch.nn.Module, ckpt_path: str, device: torch
     return meta
 
 
-def _infer_phase1_in_dim_from_checkpoint(ckpt_path: str):
+def _infer_phase0_in_dim_from_checkpoint(ckpt_path: str):
     ckpt = _torch_load_compat(ckpt_path, map_location="cpu")
     if isinstance(ckpt, dict) and "model_state_dict" in ckpt:
         state_dict = ckpt["model_state_dict"]
@@ -407,10 +407,10 @@ def _infer_phase1_in_dim_from_checkpoint(ckpt_path: str):
                 in_dim = int(v.shape[1])
                 break
         if in_dim is None:
-            raise ValueError(f"Cannot infer phase-1 input dim from checkpoint: {ckpt_path}")
+            raise ValueError(f"Cannot infer phase-0 input dim from checkpoint: {ckpt_path}")
 
     if in_dim not in (2, 3):
-        raise ValueError(f"Unsupported inferred phase-1 input dim={in_dim} from checkpoint: {ckpt_path}")
+        raise ValueError(f"Unsupported inferred phase-0 input dim={in_dim} from checkpoint: {ckpt_path}")
     return in_dim
 
 
@@ -559,66 +559,73 @@ def main():
     cfg = Config(cfg_path)
     device = torch.device(cfg.device)
     eps_tag = _make_eps_tag(cfg.eps_global)
-    enable_phase2 = _to_bool(getattr(cfg, "enable_phase2", True), default=True)
-    enable_phase3 = _to_bool(getattr(cfg, "enable_phase3", False), default=False)
+    enable_phase1 = _to_bool(getattr(cfg, "enable_phase1", True), default=True)
+    enable_phase2 = _to_bool(getattr(cfg, "enable_phase2", False), default=False)
 
     normalized_bc = _to_bool(getattr(cfg, "normalized_bc", True), default=True)
     train_two_phase_only = _to_bool(getattr(cfg, "train_two_phase_only", False), default=False)
+    run_phase1_only = _to_bool(getattr(cfg, "run_phase1_only", False), default=False)
     run_phase2_only = _to_bool(getattr(cfg, "run_phase2_only", False), default=False)
-    run_phase3_only = _to_bool(getattr(cfg, "run_phase3_only", False), default=False)
     eps_pos_int_n = eps_to_n_pos_int(cfg.eps_global)
     if eps_pos_int_n is not None:
-        if run_phase2_only or enable_phase2:
+        if run_phase1_only or enable_phase1:
             print(
                 f"[Warn] eps_global={cfg.eps_global} is a positive integer (n={eps_pos_int_n}); "
-                "Phase2 analytic targets are not implemented yet. Disable Phase2 and keep Phase1/Phase3 available."
+                "Phase1 analytic targets are not implemented yet. Disable Phase1 and keep Phase0/Phase2 available."
             )
-        enable_phase2 = False
-        run_phase2_only = False
+        enable_phase1 = False
+        run_phase1_only = False
 
     solution_scale_mode = str(getattr(cfg, "solution_scale_mode", "auto")).strip().lower()
     if solution_scale_mode not in {"auto", "manual"}:
         print(f"[Warn] Unknown solution_scale_mode={solution_scale_mode}, fallback to auto")
         solution_scale_mode = "auto"
-    p1_solution_scale = float(getattr(cfg, "solution_scale_p1", 1.0))
+    p0_solution_scale = float(getattr(cfg, "solution_scale_p0", 1.0))
+    p1_solution_scale = float(getattr(cfg, "solution_scale_p1", p0_solution_scale))
     p2_solution_scale = float(getattr(cfg, "solution_scale_p2", p1_solution_scale))
-    p3_solution_scale = float(getattr(cfg, "solution_scale_p3", p2_solution_scale))
     solution_scale_ref_mean = float(getattr(cfg, "solution_scale_ref_mean", 1e-1))
     solution_scale_max = float(getattr(cfg, "solution_scale_max", 1e12))
     solution_scale_min = float(getattr(cfg, "solution_scale_min", 1e-30))
+    p0_solution_scale_max = float(getattr(cfg, "solution_scale_max_p0", solution_scale_max))
     p1_solution_scale_max = float(getattr(cfg, "solution_scale_max_p1", solution_scale_max))
     p2_solution_scale_max = float(getattr(cfg, "solution_scale_max_p2", solution_scale_max))
-    p3_solution_scale_max = float(getattr(cfg, "solution_scale_max_p3", solution_scale_max))
+    p0_solution_scale_min = float(getattr(cfg, "solution_scale_min_p0", solution_scale_min))
     p1_solution_scale_min = float(getattr(cfg, "solution_scale_min_p1", solution_scale_min))
     p2_solution_scale_min = float(getattr(cfg, "solution_scale_min_p2", solution_scale_min))
-    p3_solution_scale_min = float(getattr(cfg, "solution_scale_min_p3", solution_scale_min))
+    if p0_solution_scale_min <= 0.0:
+        p0_solution_scale_min = 1e-30
     if p1_solution_scale_min <= 0.0:
         p1_solution_scale_min = 1e-30
     if p2_solution_scale_min <= 0.0:
         p2_solution_scale_min = 1e-30
-    if p3_solution_scale_min <= 0.0:
-        p3_solution_scale_min = 1e-30
     bc_loss_use_normalized = _to_bool(getattr(cfg, "bc_loss_use_normalized", True), default=True)
     bc_loss_scale_floor = float(getattr(cfg, "bc_loss_scale_floor", 1e-4))
     bc_loss_min_scale_ratio = float(getattr(cfg, "bc_loss_min_scale_ratio", 1.0))
     bc_loss_abs_mse_weight = float(getattr(cfg, "bc_loss_abs_mse_weight", 0.05))
     plot_vector_l2_hist = _to_bool(getattr(cfg, "plot_vector_l2_hist", True), default=True)
-    use_clip_gn_phase2 = _to_bool(getattr(cfg, "use_clip_gn_phase2", True), default=True)
-    grad_clip_max_norm = float(getattr(cfg, "grad_clip_max_norm", 10.0))
-    if grad_clip_max_norm <= 0.0:
-        print(f"[Warn] grad_clip_max_norm={grad_clip_max_norm} <= 0, fallback to 10.0")
-        grad_clip_max_norm = 10.0
-    p2_loss_name_suffix = f"_clip_{_make_eps_tag(grad_clip_max_norm)}" if use_clip_gn_phase2 else ""
-    use_clip_gn_phase3 = _to_bool(getattr(cfg, "use_clip_gn_phase3", True), default=True)
-    grad_clip_max_norm_phase3 = float(getattr(cfg, "grad_clip_max_norm_phase3", grad_clip_max_norm))
-    if grad_clip_max_norm_phase3 <= 0.0:
+    use_clip_gn_phase1 = _to_bool(getattr(cfg, "use_clip_gn_phase1", True), default=True)
+    grad_clip_max_norm_phase1 = float(getattr(cfg, "grad_clip_max_norm_phase1", 10.0))
+    if grad_clip_max_norm_phase1 <= 0.0:
         print(
-            f"[Warn] grad_clip_max_norm_phase3={grad_clip_max_norm_phase3} <= 0, "
-            f"fallback to {grad_clip_max_norm:g}"
+            f"[Warn] grad_clip_max_norm_phase1={grad_clip_max_norm_phase1} <= 0, "
+            "fallback to 10.0"
         )
-        grad_clip_max_norm_phase3 = grad_clip_max_norm
-    p3_loss_name_suffix = (
-        f"_clip_{_make_eps_tag(grad_clip_max_norm_phase3)}" if use_clip_gn_phase3 else ""
+        grad_clip_max_norm_phase1 = 10.0
+    p1_loss_name_suffix = (
+        f"_clip_{_make_eps_tag(grad_clip_max_norm_phase1)}" if use_clip_gn_phase1 else ""
+    )
+    use_clip_gn_phase2 = _to_bool(getattr(cfg, "use_clip_gn_phase2", True), default=True)
+    grad_clip_max_norm_phase2 = float(
+        getattr(cfg, "grad_clip_max_norm_phase2", grad_clip_max_norm_phase1)
+    )
+    if grad_clip_max_norm_phase2 <= 0.0:
+        print(
+            f"[Warn] grad_clip_max_norm_phase2={grad_clip_max_norm_phase2} <= 0, "
+            f"fallback to {grad_clip_max_norm_phase1:g}"
+        )
+        grad_clip_max_norm_phase2 = grad_clip_max_norm_phase1
+    p2_loss_name_suffix = (
+        f"_clip_{_make_eps_tag(grad_clip_max_norm_phase2)}" if use_clip_gn_phase2 else ""
     )
     n_basis_2loop = int(getattr(cfg, "n_basis_2loop", 22))
     if n_basis_2loop <= 0:
@@ -633,18 +640,18 @@ def main():
     y1_max_2loop = float(getattr(cfg, "y1_max_2loop", getattr(cfg, "y1_max_1loop", 1.0)))
     y2_min_2loop = float(getattr(cfg, "y2_min_2loop", y1_min_2loop))
     y2_max_2loop = float(getattr(cfg, "y2_max_2loop", y1_max_2loop))
+    p0_output_part = _normalize_output_part(getattr(cfg, "phase0_output_part", "both"))
+    p0_output_part_tag = _output_part_tag(p0_output_part)
+    p0_output_part_label = "Both" if p0_output_part == "both" else ("Re" if p0_output_part == "re" else "Im")
     p1_output_part = _normalize_output_part(getattr(cfg, "phase1_output_part", "both"))
     p1_output_part_tag = _output_part_tag(p1_output_part)
     p1_output_part_label = "Both" if p1_output_part == "both" else ("Re" if p1_output_part == "re" else "Im")
     p2_output_part = _normalize_output_part(getattr(cfg, "phase2_output_part", "both"))
     p2_output_part_tag = _output_part_tag(p2_output_part)
     p2_output_part_label = "Both" if p2_output_part == "both" else ("Re" if p2_output_part == "re" else "Im")
-    p3_output_part = _normalize_output_part(getattr(cfg, "phase3_output_part", "both"))
-    p3_output_part_tag = _output_part_tag(p3_output_part)
-    p3_output_part_label = "Both" if p3_output_part == "both" else ("Re" if p3_output_part == "re" else "Im")
-    p1_phase_tag = "P1"
+    p0_phase_tag = "P0"
+    p1_phase_tag = "P1_gnclip" if use_clip_gn_phase1 else "P1"
     p2_phase_tag = "P2_gnclip" if use_clip_gn_phase2 else "P2"
-    p3_phase_tag = "P3_gnclip" if use_clip_gn_phase3 else "P3"
     postcalc_num_workers = _resolve_postcalc_workers(getattr(cfg, "postcalc_num_workers", 1))
     postcalc_chunk_size = max(int(getattr(cfg, "postcalc_chunk_size", 2000)), 1)
     postcalc_parallel_min_points = max(int(getattr(cfg, "postcalc_parallel_min_points", 5000)), 1)
@@ -653,15 +660,15 @@ def main():
     reuse_saved_models = _to_bool(getattr(cfg, "reuse_saved_models", False), default=False)
     save_eval_bundle = _to_bool(getattr(cfg, "save_eval_bundle", True), default=True)
     reuse_eval_bundle = _to_bool(getattr(cfg, "reuse_eval_bundle", False), default=False)
+    p0_model_load_path = _resolve_optional_path(getattr(cfg, "phase0_model_load_path", None))
+    p0_history_load_path = _resolve_optional_path(getattr(cfg, "phase0_history_load_path", None))
     p1_model_load_path = _resolve_optional_path(getattr(cfg, "phase1_model_load_path", None))
     p1_history_load_path = _resolve_optional_path(getattr(cfg, "phase1_history_load_path", None))
     p2_model_load_path = _resolve_optional_path(getattr(cfg, "phase2_model_load_path", None))
     p2_history_load_path = _resolve_optional_path(getattr(cfg, "phase2_history_load_path", None))
-    p3_model_load_path = _resolve_optional_path(getattr(cfg, "phase3_model_load_path", None))
-    p3_history_load_path = _resolve_optional_path(getattr(cfg, "phase3_history_load_path", None))
+    p0_eval_bundle_load_path = _resolve_optional_path(getattr(cfg, "phase0_eval_bundle_load_path", None))
     p1_eval_bundle_load_path = _resolve_optional_path(getattr(cfg, "phase1_eval_bundle_load_path", None))
     p2_eval_bundle_load_path = _resolve_optional_path(getattr(cfg, "phase2_eval_bundle_load_path", None))
-    p3_eval_bundle_load_path = _resolve_optional_path(getattr(cfg, "phase3_eval_bundle_load_path", None))
 
     if use_results_gpu_models:
         set_results_root_name("results_gpu_local_test" if use_local_cfg else "results_gpu")
@@ -670,127 +677,136 @@ def main():
     else:
         set_results_root_name("results_local_test" if use_local_cfg else "results")
 
-    if run_phase2_only and run_phase3_only:
-        raise ValueError("run_phase2_only and run_phase3_only cannot both be True.")
-    if enable_phase2 and enable_phase3:
-        raise ValueError("Phase2 and Phase3 cannot run together in one execution.")
-    if run_phase2_only and enable_phase3:
-        raise ValueError("run_phase2_only=True requires enable_phase3=False.")
-    if run_phase3_only and enable_phase2:
-        raise ValueError("run_phase3_only=True requires enable_phase2=False.")
+    if run_phase1_only and run_phase2_only:
+        raise ValueError("run_phase1_only and run_phase2_only cannot both be True.")
+    if enable_phase1 and enable_phase2:
+        raise ValueError("Phase1 and Phase2 cannot run together in one execution.")
+    if run_phase1_only and enable_phase2:
+        raise ValueError("run_phase1_only=True requires enable_phase2=False.")
+    if run_phase2_only and enable_phase1:
+        raise ValueError("run_phase2_only=True requires enable_phase1=False.")
+    if run_phase1_only and (not enable_phase1):
+        print("[Warn] run_phase1_only=True overrides enable_phase1=False -> enable_phase1=True")
+        enable_phase1 = True
     if run_phase2_only and (not enable_phase2):
         print("[Warn] run_phase2_only=True overrides enable_phase2=False -> enable_phase2=True")
         enable_phase2 = True
-    if run_phase3_only and (not enable_phase3):
-        print("[Warn] run_phase3_only=True overrides enable_phase3=False -> enable_phase3=True")
-        enable_phase3 = True
-    run_transfer_only = bool(run_phase2_only or run_phase3_only)
+    run_transfer_only = bool(run_phase1_only or run_phase2_only)
 
     if train_two_phase_only:
         reuse_saved_models = False
         reuse_eval_bundle = False
+        p1_model_load_path = None
+        p1_history_load_path = None
+        p1_eval_bundle_load_path = None
         p2_model_load_path = None
         p2_history_load_path = None
         p2_eval_bundle_load_path = None
-        p3_model_load_path = None
-        p3_history_load_path = None
-        p3_eval_bundle_load_path = None
         if not run_transfer_only:
-            p1_model_load_path = None
-            p1_history_load_path = None
-            p1_eval_bundle_load_path = None
+            p0_model_load_path = None
+            p0_history_load_path = None
+            p0_eval_bundle_load_path = None
 
     if not normalized_bc:
         solution_scale_mode = "manual"
+        p0_solution_scale = 1.0
         p1_solution_scale = 1.0
         p2_solution_scale = 1.0
-        p3_solution_scale = 1.0
         bc_loss_use_normalized = False
 
-    p1_bc_cfg = getattr(cfg, "coll_bc", {})
+    p0_bc_cfg = getattr(cfg, "coll_bc", {})
+    if not isinstance(p0_bc_cfg, dict):
+        p0_bc_cfg = {}
+    p0_n_bc_edge = int(p0_bc_cfg.get("n_bc_edge", getattr(cfg, "n_bc_edge", 5)))
+    p0_n_corner_each = int(p0_bc_cfg.get("n_corner_each", getattr(cfg, "n_corner_each", 5)))
+    p0_target_total = int(p0_bc_cfg.get("target_total", getattr(cfg, "target_total", 200)))
+
+    p1_bc_cfg = getattr(cfg, "coll_bc_1loop", {})
     if not isinstance(p1_bc_cfg, dict):
         p1_bc_cfg = {}
-    p1_n_bc_edge = int(p1_bc_cfg.get("n_bc_edge", getattr(cfg, "n_bc_edge", 5)))
-    p1_n_corner_each = int(p1_bc_cfg.get("n_corner_each", getattr(cfg, "n_corner_each", 5)))
-    p1_target_total = int(p1_bc_cfg.get("target_total", getattr(cfg, "target_total", 200)))
+    p1_target_total_bc = int(p1_bc_cfg.get("target_total_bc", getattr(cfg, "target_total_bc", 500)))
+    p1_n_bc_edge = int(p1_bc_cfg.get("n_bc_edge", getattr(cfg, "n_bc_edge_1loop", 6)))
+    p1_n_face_pts = int(p1_bc_cfg.get("n_face_pts", getattr(cfg, "n_face_pts", 40)))
+    p1_n_corner_extra = int(p1_bc_cfg.get("n_corner_extra", getattr(cfg, "n_corner_extra", 5)))
+    p1_bc_abs_cap = float(p1_bc_cfg.get("bc_abs_cap", getattr(cfg, "bc_abs_cap", 1e8)))
 
-    p2_bc_cfg = getattr(cfg, "coll_bc_1loop", {})
+    p2_bc_cfg = getattr(cfg, "coll_bc_2loop", {})
     if not isinstance(p2_bc_cfg, dict):
         p2_bc_cfg = {}
-    p2_target_total_bc = int(p2_bc_cfg.get("target_total_bc", getattr(cfg, "target_total_bc", 500)))
-    p2_n_bc_edge = int(p2_bc_cfg.get("n_bc_edge", getattr(cfg, "n_bc_edge_1loop", 6)))
-    p2_n_face_pts = int(p2_bc_cfg.get("n_face_pts", getattr(cfg, "n_face_pts", 40)))
-    p2_n_corner_extra = int(p2_bc_cfg.get("n_corner_extra", getattr(cfg, "n_corner_extra", 5)))
-    p2_bc_abs_cap = float(p2_bc_cfg.get("bc_abs_cap", getattr(cfg, "bc_abs_cap", 1e8)))
+    p2_target_total_bc = int(p2_bc_cfg.get("target_total_bc", getattr(cfg, "target_total_bc_2loop", 500)))
+    p2_n_bc_edge = int(p2_bc_cfg.get("n_bc_edge", getattr(cfg, "n_bc_edge_2loop", 6)))
+    p2_n_face_pts = int(p2_bc_cfg.get("n_face_pts", getattr(cfg, "n_face_pts_2loop", 40)))
+    p2_n_cell_pts = int(p2_bc_cfg.get("n_cell_pts", getattr(cfg, "n_cell_pts_2loop", 40)))
+    p2_n_corner_extra = int(p2_bc_cfg.get("n_corner_extra", getattr(cfg, "n_corner_extra_2loop", 5)))
+    p2_bc_abs_cap = float(p2_bc_cfg.get("bc_abs_cap", getattr(cfg, "bc_abs_cap_2loop", 1e8)))
 
-    p3_bc_cfg = getattr(cfg, "coll_bc_2loop", {})
-    if not isinstance(p3_bc_cfg, dict):
-        p3_bc_cfg = {}
-    p3_target_total_bc = int(p3_bc_cfg.get("target_total_bc", getattr(cfg, "target_total_bc_2loop", 500)))
-    p3_n_bc_edge = int(p3_bc_cfg.get("n_bc_edge", getattr(cfg, "n_bc_edge_2loop", 6)))
-    p3_n_face_pts = int(p3_bc_cfg.get("n_face_pts", getattr(cfg, "n_face_pts_2loop", 40)))
-    p3_n_cell_pts = int(p3_bc_cfg.get("n_cell_pts", getattr(cfg, "n_cell_pts_2loop", 40)))
-    p3_n_corner_extra = int(p3_bc_cfg.get("n_corner_extra", getattr(cfg, "n_corner_extra_2loop", 5)))
-    p3_bc_abs_cap = float(p3_bc_cfg.get("bc_abs_cap", getattr(cfg, "bc_abs_cap_2loop", 1e8)))
-
+    p0_artifacts = _phase_artifact_paths(
+        phase=0,
+        cy=cfg.cy,
+        eps_global=cfg.eps_global,
+        phase_tag=p0_phase_tag,
+        output_part_tag=p0_output_part_tag,
+    )
     p1_artifacts = _phase_artifact_paths(
         phase=1,
-        cy=cfg.cy,
+        cy=cfg.cy_1loop,
         eps_global=cfg.eps_global,
         phase_tag=p1_phase_tag,
         output_part_tag=p1_output_part_tag,
     )
     p2_artifacts = _phase_artifact_paths(
         phase=2,
-        cy=cfg.cy_1loop,
+        cy=cy_2loop,
         eps_global=cfg.eps_global,
         phase_tag=p2_phase_tag,
         output_part_tag=p2_output_part_tag,
     )
-    p3_artifacts = _phase_artifact_paths(
-        phase=3,
-        cy=cy_2loop,
+    p0_bundle_artifacts = _phase_eval_bundle_paths(
+        phase=0,
+        cy=cfg.cy,
         eps_global=cfg.eps_global,
-        phase_tag=p3_phase_tag,
-        output_part_tag=p3_output_part_tag,
+        phase_tag=p0_phase_tag,
+        output_part_tag=p0_output_part_tag,
     )
     p1_bundle_artifacts = _phase_eval_bundle_paths(
         phase=1,
-        cy=cfg.cy,
+        cy=cfg.cy_1loop,
         eps_global=cfg.eps_global,
         phase_tag=p1_phase_tag,
         output_part_tag=p1_output_part_tag,
     )
     p2_bundle_artifacts = _phase_eval_bundle_paths(
         phase=2,
-        cy=cfg.cy_1loop,
+        cy=cy_2loop,
         eps_global=cfg.eps_global,
         phase_tag=p2_phase_tag,
         output_part_tag=p2_output_part_tag,
     )
-    p3_bundle_artifacts = _phase_eval_bundle_paths(
-        phase=3,
-        cy=cy_2loop,
-        eps_global=cfg.eps_global,
-        phase_tag=p3_phase_tag,
-        output_part_tag=p3_output_part_tag,
-    )
 
-    if p1_model_load_path is None and run_transfer_only and os.path.isfile(p1_artifacts["model_abs"]):
-        p1_model_load_path = p1_artifacts["model_abs"]
+    if p0_model_load_path is None and run_transfer_only and os.path.isfile(p0_artifacts["model_abs"]):
+        p0_model_load_path = p0_artifacts["model_abs"]
 
+    if p0_model_load_path is None and reuse_saved_models and os.path.isfile(p0_artifacts["model_abs"]):
+        p0_model_load_path = p0_artifacts["model_abs"]
     if p1_model_load_path is None and reuse_saved_models and os.path.isfile(p1_artifacts["model_abs"]):
         p1_model_load_path = p1_artifacts["model_abs"]
     if p2_model_load_path is None and reuse_saved_models and os.path.isfile(p2_artifacts["model_abs"]):
         p2_model_load_path = p2_artifacts["model_abs"]
-    if p3_model_load_path is None and reuse_saved_models and os.path.isfile(p3_artifacts["model_abs"]):
-        p3_model_load_path = p3_artifacts["model_abs"]
+    if p0_eval_bundle_load_path is None and reuse_eval_bundle and os.path.isfile(p0_bundle_artifacts["bundle_abs"]):
+        p0_eval_bundle_load_path = p0_bundle_artifacts["bundle_abs"]
     if p1_eval_bundle_load_path is None and reuse_eval_bundle and os.path.isfile(p1_bundle_artifacts["bundle_abs"]):
         p1_eval_bundle_load_path = p1_bundle_artifacts["bundle_abs"]
     if p2_eval_bundle_load_path is None and reuse_eval_bundle and os.path.isfile(p2_bundle_artifacts["bundle_abs"]):
         p2_eval_bundle_load_path = p2_bundle_artifacts["bundle_abs"]
-    if p3_eval_bundle_load_path is None and reuse_eval_bundle and os.path.isfile(p3_bundle_artifacts["bundle_abs"]):
-        p3_eval_bundle_load_path = p3_bundle_artifacts["bundle_abs"]
+
+    if p0_history_load_path is None and p0_model_load_path is not None:
+        if os.path.abspath(p0_model_load_path) == os.path.abspath(p0_artifacts["model_abs"]):
+            if os.path.isfile(p0_artifacts["history_abs"]):
+                p0_history_load_path = p0_artifacts["history_abs"]
+        else:
+            guessed = _guess_history_path_from_model_path(p0_model_load_path)
+            if os.path.isfile(guessed):
+                p0_history_load_path = guessed
 
     if p1_history_load_path is None and p1_model_load_path is not None:
         if os.path.abspath(p1_model_load_path) == os.path.abspath(p1_artifacts["model_abs"]):
@@ -810,35 +826,26 @@ def main():
             if os.path.isfile(guessed):
                 p2_history_load_path = guessed
 
-    if p3_history_load_path is None and p3_model_load_path is not None:
-        if os.path.abspath(p3_model_load_path) == os.path.abspath(p3_artifacts["model_abs"]):
-            if os.path.isfile(p3_artifacts["history_abs"]):
-                p3_history_load_path = p3_artifacts["history_abs"]
-        else:
-            guessed = _guess_history_path_from_model_path(p3_model_load_path)
-            if os.path.isfile(guessed):
-                p3_history_load_path = guessed
-
-    if run_transfer_only and p1_model_load_path is None:
-        transfer_target = "Phase-2" if run_phase2_only else "Phase-3"
+    if run_transfer_only and p0_model_load_path is None:
+        transfer_target = "Phase-1" if run_phase1_only else "Phase-2"
         raise FileNotFoundError(
-            f"{transfer_target} transfer-only mode requires a Phase-1 checkpoint, "
-            "but none was found. Set `phase1_model_load_path`, or enable "
-            "`reuse_saved_models` with an existing Phase-1 checkpoint."
+            f"{transfer_target} transfer-only mode requires a Phase-0 checkpoint, "
+            "but none was found. Set `phase0_model_load_path`, or enable "
+            "`reuse_saved_models` with an existing Phase-0 checkpoint."
         )
 
-    if p1_model_load_path is not None and (not os.path.isfile(p1_model_load_path)):
+    if p0_model_load_path is not None and (not os.path.isfile(p0_model_load_path)):
+        raise FileNotFoundError(f"P0 checkpoint not found: {p0_model_load_path}")
+    if enable_phase1 and p1_model_load_path is not None and (not os.path.isfile(p1_model_load_path)):
         raise FileNotFoundError(f"P1 checkpoint not found: {p1_model_load_path}")
     if enable_phase2 and p2_model_load_path is not None and (not os.path.isfile(p2_model_load_path)):
         raise FileNotFoundError(f"P2 checkpoint not found: {p2_model_load_path}")
-    if enable_phase3 and p3_model_load_path is not None and (not os.path.isfile(p3_model_load_path)):
-        raise FileNotFoundError(f"P3 checkpoint not found: {p3_model_load_path}")
-    if p1_eval_bundle_load_path is not None and (not os.path.isfile(p1_eval_bundle_load_path)):
+    if p0_eval_bundle_load_path is not None and (not os.path.isfile(p0_eval_bundle_load_path)):
+        raise FileNotFoundError(f"P0 eval-bundle not found: {p0_eval_bundle_load_path}")
+    if enable_phase1 and p1_eval_bundle_load_path is not None and (not os.path.isfile(p1_eval_bundle_load_path)):
         raise FileNotFoundError(f"P1 eval-bundle not found: {p1_eval_bundle_load_path}")
     if enable_phase2 and p2_eval_bundle_load_path is not None and (not os.path.isfile(p2_eval_bundle_load_path)):
         raise FileNotFoundError(f"P2 eval-bundle not found: {p2_eval_bundle_load_path}")
-    if enable_phase3 and p3_eval_bundle_load_path is not None and (not os.path.isfile(p3_eval_bundle_load_path)):
-        raise FileNotFoundError(f"P3 eval-bundle not found: {p3_eval_bundle_load_path}")
 
     _cfg_abs, cfg_short = _save_config_snapshot(cfg_path, cfg.eps_global)
 
@@ -847,18 +854,18 @@ def main():
     print(f"[saved] config snapshot to [{cfg_short}]")
 
     eps_kind, sol_branch, cde_form = _classify_eps_global(cfg.eps_global)
-    print(f"[Mode] phase1 fixed eps_global reference: {cfg.eps_global}")
+    print(f"[Mode] phase0 fixed eps_global reference: {cfg.eps_global}")
     print(f"[Mode] eps category: {eps_kind}")
     print(f"[Mode] analytic branch: {sol_branch}")
     print(f"[Mode] CDE form: {cde_form}")
     if eps_pos_int_n is not None:
-        print(f"[Mode] positive-integer eps support: Phase1/Phase3 enabled, Phase2 disabled (n={eps_pos_int_n})")
+        print(f"[Mode] positive-integer eps support: Phase0/Phase2 enabled, Phase1 disabled (n={eps_pos_int_n})")
+    print(f"[Mode] phase0 output part: {p0_output_part_label}")
     print(f"[Mode] phase1 output part: {p1_output_part_label}")
     print(f"[Mode] phase2 output part: {p2_output_part_label}")
-    print(f"[Mode] phase3 output part: {p3_output_part_label}")
     print(f"[Mode] normalized BC mode: {normalized_bc}")
+    print(f"[Mode] run phase1 only: {run_phase1_only}")
     print(f"[Mode] run phase2 only: {run_phase2_only}")
-    print(f"[Mode] run phase3 only: {run_phase3_only}")
 
     np.random.seed(0)
     torch.manual_seed(0)
@@ -881,9 +888,9 @@ def main():
             )
         return _loss
 
+    boundary_loss_cfg_p0 = make_boundary_loss_cfg(p0_output_part)
     boundary_loss_cfg_p1 = make_boundary_loss_cfg(p1_output_part)
     boundary_loss_cfg_p2 = make_boundary_loss_cfg(p2_output_part)
-    boundary_loss_cfg_p3 = make_boundary_loss_cfg(p3_output_part)
 
     print(
         "[Mode] BC loss: "
@@ -899,19 +906,19 @@ def main():
     print(
         "[Mode] solution scaling: "
         f"mode={solution_scale_mode}, "
+        f"P0={p0_solution_scale:g}, "
         f"P1={p1_solution_scale:g}, "
         f"P2={p2_solution_scale:g}, "
-        f"P3={p3_solution_scale:g}, "
         f"ref_mean={solution_scale_ref_mean:g}, "
-        f"min(P1/P2/P3)=({p1_solution_scale_min:g}/{p2_solution_scale_min:g}/{p3_solution_scale_min:g}), "
-        f"max(P1/P2/P3)=({p1_solution_scale_max:g}/{p2_solution_scale_max:g}/{p3_solution_scale_max:g})"
+        f"min(P0/P1/P2)=({p0_solution_scale_min:g}/{p1_solution_scale_min:g}/{p2_solution_scale_min:g}), "
+        f"max(P0/P1/P2)=({p0_solution_scale_max:g}/{p1_solution_scale_max:g}/{p2_solution_scale_max:g})"
     )
     print(f"[Mode] plot vector-L2 hist: {plot_vector_l2_hist}")
     print(
         "[Mode] grad-norm probe: "
-        f"P1=False (fixed), "
-        f"P2={use_clip_gn_phase2}(clip={grad_clip_max_norm:g}), "
-        f"P3={use_clip_gn_phase3}(clip={grad_clip_max_norm_phase3:g})"
+        f"P0=False (fixed), "
+        f"P1={use_clip_gn_phase1}(clip={grad_clip_max_norm_phase1:g}), "
+        f"P2={use_clip_gn_phase2}(clip={grad_clip_max_norm_phase2:g})"
     )
     print(
         "[Mode] post-calc CPU parallel: "
@@ -926,9 +933,14 @@ def main():
     print(f"[Mode] reuse saved models: {reuse_saved_models}")
     print(f"[Mode] save eval bundle: {save_eval_bundle}")
     print(f"[Mode] reuse eval bundle: {reuse_eval_bundle}")
+    p0_ckpt_mode_text = p0_model_load_path if p0_model_load_path is not None else f"train then save -> {p0_artifacts['model_short']}"
     p1_ckpt_mode_text = p1_model_load_path if p1_model_load_path is not None else f"train then save -> {p1_artifacts['model_short']}"
     p2_ckpt_mode_text = p2_model_load_path if p2_model_load_path is not None else f"train then save -> {p2_artifacts['model_short']}"
-    p3_ckpt_mode_text = p3_model_load_path if p3_model_load_path is not None else f"train then save -> {p3_artifacts['model_short']}"
+    p0_bundle_mode_text = (
+        p0_eval_bundle_load_path
+        if p0_eval_bundle_load_path is not None
+        else f"sample then save -> {p0_bundle_artifacts['bundle_short']}"
+    )
     p1_bundle_mode_text = (
         p1_eval_bundle_load_path
         if p1_eval_bundle_load_path is not None
@@ -939,50 +951,45 @@ def main():
         if p2_eval_bundle_load_path is not None
         else f"sample then save -> {p2_bundle_artifacts['bundle_short']}"
     )
-    p3_bundle_mode_text = (
-        p3_eval_bundle_load_path
-        if p3_eval_bundle_load_path is not None
-        else f"sample then save -> {p3_bundle_artifacts['bundle_short']}"
-    )
+    print(f"[Mode] P0 checkpoint: {p0_ckpt_mode_text}")
     print(f"[Mode] P1 checkpoint: {p1_ckpt_mode_text}")
     print(f"[Mode] P2 checkpoint: {p2_ckpt_mode_text}")
-    print(f"[Mode] P3 checkpoint: {p3_ckpt_mode_text}")
+    print(f"[Mode] P0 eval-bundle: {p0_bundle_mode_text}")
     print(f"[Mode] P1 eval-bundle: {p1_bundle_mode_text}")
     print(f"[Mode] P2 eval-bundle: {p2_bundle_mode_text}")
-    print(f"[Mode] P3 eval-bundle: {p3_bundle_mode_text}")
+    if run_phase1_only:
+        print(f"[Mode] run_phase1_only source P0 checkpoint: {p0_model_load_path}")
     if run_phase2_only:
-        print(f"[Mode] run_phase2_only source P1 checkpoint: {p1_model_load_path}")
-    if run_phase3_only:
-        print(f"[Mode] run_phase3_only source P1 checkpoint: {p1_model_load_path}")
-    phase1_t0 = time.perf_counter()
-    p1_bundle_meta = {}
+        print(f"[Mode] run_phase2_only source P0 checkpoint: {p0_model_load_path}")
+    phase0_t0 = time.perf_counter()
+    p0_bundle_meta = {}
     x_coll = None
     x_b_tensor = None
     bc_target = None
     bc_target_train = None
-    p1_transfer_log_messages = []
+    p0_transfer_log_messages = []
     if run_transfer_only:
-        transfer_phase_name = "Phase 2" if run_phase2_only else "Phase 3"
+        transfer_phase_name = "Phase 1" if run_phase1_only else "Phase 2"
         print(
-            f"\n[Mode] transfer-only ({transfer_phase_name}) -> skip Phase 1 sampling/training/plots/checks; "
-            "load Phase 1 checkpoint for transfer."
+            f"\n[Mode] transfer-only ({transfer_phase_name}) -> skip Phase 0 sampling/training/plots/checks; "
+            "load Phase 0 checkpoint for transfer."
         )
-        print(f"[Mode] transfer-only using P1 checkpoint: {p1_model_load_path}")
-        p1_in_dim = _infer_phase1_in_dim_from_checkpoint(p1_model_load_path)
-        p1_uses_eps_input = bool(p1_in_dim == 3)
-        model_base = PinnModel(cfg, in_dim=p1_in_dim, output_part=p1_output_part).to(device)
+        print(f"[Mode] transfer-only using P0 checkpoint: {p0_model_load_path}")
+        p0_in_dim = _infer_phase0_in_dim_from_checkpoint(p0_model_load_path)
+        p0_uses_eps_input = bool(p0_in_dim == 3)
+        model_base = PinnModel(cfg, in_dim=p0_in_dim, output_part=p0_output_part).to(device)
     else:
-        if p1_eval_bundle_load_path is not None:
-            x_coll, x_b_tensor, bc_target, p1_bundle_meta = _load_eval_bundle(p1_eval_bundle_load_path, device)
-            print(f"[loaded] P1 eval-bundle from [{p1_eval_bundle_load_path}]")
+        if p0_eval_bundle_load_path is not None:
+            x_coll, x_b_tensor, bc_target, p0_bundle_meta = _load_eval_bundle(p0_eval_bundle_load_path, device)
+            print(f"[loaded] P0 eval-bundle from [{p0_eval_bundle_load_path}]")
             b_part_norm = _normalize_output_part(
-                p1_bundle_meta.get("output_part", p1_output_part),
-                default=p1_output_part,
+                p0_bundle_meta.get("output_part", p0_output_part),
+                default=p0_output_part,
             )
-            if b_part_norm != p1_output_part:
+            if b_part_norm != p0_output_part:
                 print(
-                    f"[Warn] loaded P1 eval-bundle output_part={b_part_norm} "
-                    f"!= config phase1_output_part={p1_output_part}; applying config selection."
+                    f"[Warn] loaded P0 eval-bundle output_part={b_part_norm} "
+                    f"!= config phase0_output_part={p0_output_part}; applying config selection."
                 )
         else:
             x_coll, x_b_tensor, bc_target, _ = build_inputs_and_boundary(
@@ -995,56 +1002,56 @@ def main():
                 cfg.eps_global,
                 device,
                 compute_function_target=False,
-                output_part=p1_output_part,
-                n_bc_edge=p1_n_bc_edge,
-                n_corner_each=p1_n_corner_each,
-                target_total=p1_target_total,
+                output_part=p0_output_part,
+                n_bc_edge=p0_n_bc_edge,
+                n_corner_each=p0_n_corner_each,
+                target_total=p0_target_total,
             )
 
         if x_coll.ndim != 2 or x_coll.shape[1] not in (2, 3):
             raise ValueError(f"x_coll must be shape (N,2) or (N,3), got {tuple(x_coll.shape)}")
-        p1_uses_eps_input = bool(x_coll.shape[1] == 3)
-        if p1_uses_eps_input:
+        p0_uses_eps_input = bool(x_coll.shape[1] == 3)
+        if p0_uses_eps_input:
             eps_u = torch.unique(x_coll[:, 2]).detach().cpu().numpy()
             print(
-                f"[P1] eps-input collocation mode: unique eps={len(eps_u)}, "
+                f"[P0] eps-input collocation mode: unique eps={len(eps_u)}, "
                 f"range=[{float(np.min(eps_u)):.4g},{float(np.max(eps_u)):.4g}]"
             )
 
-        bc_target = _slice_phase1_target_by_part(
+        bc_target = _slice_phase0_target_by_part(
             bc_target,
             n_basis=cfg.n_basis,
-            output_part=p1_output_part,
-            tensor_name="P1 bc_target",
+            output_part=p0_output_part,
+            tensor_name="P0 bc_target",
         )
 
         if solution_scale_mode == "auto":
             (
-                p1_solution_scale,
-                p1_bc_mean_abs,
-                p1_raw_solution_scale,
-                p1_scale_capped,
-                p1_scale_floored,
+                p0_solution_scale,
+                p0_bc_mean_abs,
+                p0_raw_solution_scale,
+                p0_scale_capped,
+                p0_scale_floored,
             ) = _auto_solution_scale_from_bc(
                 bc_target,
                 ref_mean_abs=solution_scale_ref_mean,
-                max_scale=p1_solution_scale_max,
-                min_scale=p1_solution_scale_min,
+                max_scale=p0_solution_scale_max,
+                min_scale=p0_solution_scale_min,
             )
-            p1_scale_flags = []
-            if p1_scale_capped:
-                p1_scale_flags.append(f"capped@{p1_solution_scale_max:.3e}")
-            if p1_scale_floored:
-                p1_scale_flags.append(f"floored@{p1_solution_scale_min:.3e}")
-            p1_scale_flag_text = f" ({', '.join(p1_scale_flags)})" if p1_scale_flags else ""
+            p0_scale_flags = []
+            if p0_scale_capped:
+                p0_scale_flags.append(f"capped@{p0_solution_scale_max:.3e}")
+            if p0_scale_floored:
+                p0_scale_flags.append(f"floored@{p0_solution_scale_min:.3e}")
+            p0_scale_flag_text = f" ({', '.join(p0_scale_flags)})" if p0_scale_flags else ""
             print(
-                f"[P1] auto solution scale from BC mean abs={p1_bc_mean_abs:.3e} "
-                f"-> raw={p1_raw_solution_scale:.3e}, used={p1_solution_scale:.3e}"
-                f"{p1_scale_flag_text}"
+                f"[P0] auto solution scale from BC mean abs={p0_bc_mean_abs:.3e} "
+                f"-> raw={p0_raw_solution_scale:.3e}, used={p0_solution_scale:.3e}"
+                f"{p0_scale_flag_text}"
             )
-        bc_target_train = bc_target * p1_solution_scale
+        bc_target_train = bc_target * p0_solution_scale
 
-        model_base = PinnModel(cfg, in_dim=int(x_coll.shape[1]), output_part=p1_output_part).to(device)
+        model_base = PinnModel(cfg, in_dim=int(x_coll.shape[1]), output_part=p0_output_part).to(device)
 
     from two_site_chain.mat_data import (
         a1,
@@ -1071,101 +1078,101 @@ def main():
     ).to(device)
 
     if run_transfer_only:
-        p1_log_file = None
-        p1_log_short = None
+        p0_log_file = None
+        p0_log_short = None
 
-        def p1_log(msg: str):
-            p1_transfer_log_messages.append(str(msg))
+        def p0_log(msg: str):
+            p0_transfer_log_messages.append(str(msg))
 
     else:
-        p1_log_file, p1_log_short, p1_log = _open_phase_log_writer(
-            phase=1,
+        p0_log_file, p0_log_short, p0_log = _open_phase_log_writer(
+            phase=0,
             cy=cfg.cy,
             eps_global=cfg.eps_global,
-            phase_tag=p1_phase_tag,
-            output_part_tag=p1_output_part_tag,
+            phase_tag=p0_phase_tag,
+            output_part_tag=p0_output_part_tag,
         )
 
     if run_transfer_only:
-        transfer_mode_tag = "phase2-only" if run_phase2_only else "phase3-only"
-        p1_mode_text = (
+        transfer_mode_tag = "phase1-only" if run_phase1_only else "phase2-only"
+        p0_mode_text = (
             f"{transfer_mode_tag}-load-eps-input"
-            if p1_uses_eps_input
+            if p0_uses_eps_input
             else f"{transfer_mode_tag}-load-fixed-eps"
         )
     else:
-        p1_mode_text = "fixed-eps"
-    p1_log(
-        f"[P1] mode={p1_mode_text}, eps_global={cfg.eps_global}, "
-        f"cy={cfg.cy}, output_part={p1_output_part_label}, solution_scale={p1_solution_scale:g}"
+        p0_mode_text = "fixed-eps"
+    p0_log(
+        f"[P0] mode={p0_mode_text}, eps_global={cfg.eps_global}, "
+        f"cy={cfg.cy}, output_part={p0_output_part_label}, solution_scale={p0_solution_scale:g}"
     )
 
     hist_tot = None
     hist_cde = None
     hist_bc = None
-    p1_train_info = {}
-    if p1_model_load_path is not None:
-        p1_load_header = "------ Phase 1: Load 2-Site Chain checkpoint ------"
-        print(f"\n{p1_load_header}")
-        p1_log(p1_load_header)
-        p1_meta = _load_model_checkpoint(model_base, p1_model_load_path, device)
-        if isinstance(p1_meta, dict) and ("output_part" in p1_meta):
-            ckpt_part = _normalize_output_part(p1_meta["output_part"])
-            if ckpt_part != p1_output_part:
+    p0_train_info = {}
+    if p0_model_load_path is not None:
+        p0_load_header = "------ Phase 0: Load 2-Site Chain checkpoint ------"
+        print(f"\n{p0_load_header}")
+        p0_log(p0_load_header)
+        p0_meta = _load_model_checkpoint(model_base, p0_model_load_path, device)
+        if isinstance(p0_meta, dict) and ("output_part" in p0_meta):
+            ckpt_part = _normalize_output_part(p0_meta["output_part"])
+            if ckpt_part != p0_output_part:
                 warn_msg = (
-                    f"[Warn] P1 checkpoint output_part={ckpt_part} "
-                    f"!= config phase1_output_part={p1_output_part}."
+                    f"[Warn] P0 checkpoint output_part={ckpt_part} "
+                    f"!= config phase0_output_part={p0_output_part}."
                 )
                 print(warn_msg)
-                p1_log(warn_msg)
+                p0_log(warn_msg)
         loaded_msg = (
-            f"[loaded] P1 checkpoint from [{p1_model_load_path}] "
+            f"[loaded] P0 checkpoint from [{p0_model_load_path}] "
             f"(in_dim={int(model_base.net[0].in_features)})"
         )
         print(loaded_msg)
-        p1_log(loaded_msg)
-        p1_log(f"[P1] loaded checkpoint: {p1_model_load_path}")
+        p0_log(loaded_msg)
+        p0_log(f"[P0] loaded checkpoint: {p0_model_load_path}")
 
-        if isinstance(p1_meta, dict) and ("pred_scale" in p1_meta):
-            p1_solution_scale = float(p1_meta["pred_scale"])
-            msg = f"[P1] use pred_scale from checkpoint: {p1_solution_scale:g}"
+        if isinstance(p0_meta, dict) and ("pred_scale" in p0_meta):
+            p0_solution_scale = float(p0_meta["pred_scale"])
+            msg = f"[P0] use pred_scale from checkpoint: {p0_solution_scale:g}"
             print(msg)
-            p1_log(msg)
-        elif "pred_scale" in p1_bundle_meta:
-            p1_solution_scale = float(p1_bundle_meta["pred_scale"])
-            msg = f"[P1] use pred_scale from eval-bundle: {p1_solution_scale:g}"
+            p0_log(msg)
+        elif "pred_scale" in p0_bundle_meta:
+            p0_solution_scale = float(p0_bundle_meta["pred_scale"])
+            msg = f"[P0] use pred_scale from eval-bundle: {p0_solution_scale:g}"
             print(msg)
-            p1_log(msg)
+            p0_log(msg)
 
-        loaded_hist = _load_loss_history(p1_history_load_path)
+        loaded_hist = _load_loss_history(p0_history_load_path)
         if loaded_hist is not None:
             hist_tot, hist_cde, hist_bc = loaded_hist
-            msg = f"[P1] loaded loss history from [{p1_history_load_path}]"
+            msg = f"[P0] loaded loss history from [{p0_history_load_path}]"
             print(msg)
-            p1_log(msg)
+            p0_log(msg)
         else:
-            msg = "[P1] no loss history found for loaded checkpoint."
+            msg = "[P0] no loss history found for loaded checkpoint."
             print(msg)
-            p1_log(msg)
+            p0_log(msg)
     else:
         if (x_coll is None) or (x_b_tensor is None) or (bc_target_train is None):
             raise RuntimeError(
-                "P1 training tensors are not initialized. "
+                "P0 training tensors are not initialized. "
                 "This indicates an unexpected control-flow issue."
             )
 
         print(
-            f"\n------ Phase 1: Train 2-Site Chain (fixed eps={cfg.eps_global}, output={p1_output_part_label}) ------"
+            f"\n------ Phase 0: Train 2-Site Chain (fixed eps={cfg.eps_global}, output={p0_output_part_label}) ------"
         )
 
-        def cde_fixed_p1(model, a_builder, x_batch, n_basis, eps_val):
+        def cde_fixed_p0(model, a_builder, x_batch, n_basis, eps_val):
             return cde_residual_loss_fixed_eps(
                 model,
                 a_builder,
                 x_batch,
                 n_basis,
                 eps_val=eps_val,
-                output_part=p1_output_part,
+                output_part=p0_output_part,
             )
 
         (
@@ -1173,26 +1180,26 @@ def main():
             hist_tot,
             hist_cde,
             hist_bc,
-            p1_train_info,
+            p0_train_info,
         ) = train_model_fixed_eps(
             model=model_base,
             a_builder=a_builder_fixed,
             x_coll=x_coll,
             x_b_tensor=x_b_tensor,
             bc_target=bc_target_train,
-            cde_loss_fixed_fn=cde_fixed_p1,
-            bc_loss_fn=boundary_loss_cfg_p1,
+            cde_loss_fixed_fn=cde_fixed_p0,
+            bc_loss_fn=boundary_loss_cfg_p0,
             n_basis=cfg.n_basis,
             eps_val=cfg.eps_global,
-            lr_init=cfg.learning_rate_p1,
-            warmup_len=cfg.warmup_epochs_p1,
-            total_epochs=cfg.phase1_epochs,
+            lr_init=cfg.learning_rate_p0,
+            warmup_len=cfg.warmup_epochs_p0,
+            total_epochs=cfg.phase0_epochs,
             lam1=cfg.lambda1,
             lam2=cfg.lambda2,
             cosine_min_lr=cfg.cosine_min_lr,
             print_every=cfg.print_every,
-            phase_name="P1",
-            log_fn=p1_log,
+            phase_name="P0",
+            log_fn=p0_log,
             use_grad_norm_probe=False,
         )
 
@@ -1202,54 +1209,54 @@ def main():
                 hist_tot=hist_tot,
                 hist_cde=hist_cde,
                 hist_bc=hist_bc,
-                phase=1,
+                phase=0,
                 cy=cfg.cy,
                 eps_global=cfg.eps_global,
-                pred_scale=p1_solution_scale,
+                pred_scale=p0_solution_scale,
                 extra_meta={
                     "in_dim": int(x_coll.shape[1]),
                     "n_basis": int(cfg.n_basis),
-                    "output_part": p1_output_part,
-                    **p1_train_info,
+                    "output_part": p0_output_part,
+                    **p0_train_info,
                 },
-                phase_tag=p1_phase_tag,
-                output_part_tag=p1_output_part_tag,
+                phase_tag=p0_phase_tag,
+                output_part_tag=p0_output_part_tag,
             )
             print(f"[saved] {os.path.basename(saved_paths['model_abs'])} to [{os.path.dirname(saved_paths['model_short'])}]")
             print(f"[saved] {os.path.basename(saved_paths['history_abs'])} to [{os.path.dirname(saved_paths['history_short'])}]")
-            p1_log(f"[P1] saved checkpoint: {saved_paths['model_short']}")
-            p1_log(f"[P1] saved loss history: {saved_paths['history_short']}")
+            p0_log(f"[P0] saved checkpoint: {saved_paths['model_short']}")
+            p0_log(f"[P0] saved loss history: {saved_paths['history_short']}")
 
     if save_eval_bundle and (not run_transfer_only):
         if (x_coll is None) or (x_b_tensor is None) or (bc_target is None):
             raise RuntimeError(
-                "P1 eval-bundle tensors are not initialized. "
+                "P0 eval-bundle tensors are not initialized. "
                 "This indicates an unexpected control-flow issue."
             )
-        saved_bundle_p1 = _save_eval_bundle(
-            phase=1,
+        saved_bundle_p0 = _save_eval_bundle(
+            phase=0,
             cy=cfg.cy,
             eps_global=cfg.eps_global,
             x_coll=x_coll,
             x_b_tensor=x_b_tensor,
             bc_target=bc_target,
-            pred_scale=p1_solution_scale,
+            pred_scale=p0_solution_scale,
             extra_meta={
                 "in_dim": int(x_coll.shape[1]),
                 "n_basis": int(cfg.n_basis),
-                "output_part": p1_output_part,
-                **p1_train_info,
+                "output_part": p0_output_part,
+                **p0_train_info,
             },
-            phase_tag=p1_phase_tag,
-            output_part_tag=p1_output_part_tag,
+            phase_tag=p0_phase_tag,
+            output_part_tag=p0_output_part_tag,
         )
-        print(f"[saved] {os.path.basename(saved_bundle_p1['bundle_abs'])} to [{os.path.dirname(saved_bundle_p1['bundle_short'])}]")
-        p1_log(f"[P1] saved eval-bundle: {saved_bundle_p1['bundle_short']}")
+        print(f"[saved] {os.path.basename(saved_bundle_p0['bundle_abs'])} to [{os.path.dirname(saved_bundle_p0['bundle_short'])}]")
+        p0_log(f"[P0] saved eval-bundle: {saved_bundle_p0['bundle_short']}")
 
     if (not train_two_phase_only) and (not run_transfer_only):
         if (x_coll is None) or (x_b_tensor is None) or (bc_target is None):
             raise RuntimeError(
-                "P1 plot/check tensors are not initialized. "
+                "P0 plot/check tensors are not initialized. "
                 "This indicates an unexpected control-flow issue."
             )
         if (hist_tot is not None) and (hist_cde is not None) and (hist_bc is not None):
@@ -1260,22 +1267,22 @@ def main():
                 title=rf"2-site chain, $c={cfg.cy}$, $\varepsilon={cfg.eps_global:g}$",
                 cy=cfg.cy,
                 save_dir="1_losses",
-                fname=f"P1_loss_all_eps_{eps_tag}.png",
-                fname2=f"P1_loss_total_eps_{eps_tag}.png",
-                phase=1,
-                phase_tag=p1_phase_tag,
+                fname=f"P0_loss_all_eps_{eps_tag}.png",
+                fname2=f"P0_loss_total_eps_{eps_tag}.png",
+                phase=0,
+                phase_tag=p0_phase_tag,
             )
         else:
-            msg = "[P1] skip plot_losses: loss history unavailable."
+            msg = "[P0] skip plot_losses: loss history unavailable."
             print(msg)
-            p1_log(msg)
+            p0_log(msg)
 
         with torch.no_grad():
             f_target = compute_function_target_from_xcoll(
                 x_coll,
                 cy_val=cfg.cy,
                 eps_val=cfg.eps_global,
-                output_part=p1_output_part,
+                output_part=p0_output_part,
                 num_workers=postcalc_num_workers,
                 chunk_size=postcalc_chunk_size,
                 parallel_min_points=postcalc_parallel_min_points,
@@ -1290,77 +1297,77 @@ def main():
             eps_global=cfg.eps_global,
             compute_function_target_from_xcoll=compute_function_target_from_xcoll,
             precomputed_true=f_target,
-            phase_name="P1",
-            pred_scale=p1_solution_scale,
-            log_fn=p1_log,
-            output_part=p1_output_part,
+            phase_name="P0",
+            pred_scale=p0_solution_scale,
+            log_fn=p0_log,
+            output_part=p0_output_part,
         )
 
-        if p1_output_part == "both":
+        if p0_output_part == "both":
             plot_error_dis(
                 model=model_base,
                 x_coll=x_coll,
                 function_target=f_target,
-                phase_name="P1",
-                eps_value=None if p1_uses_eps_input else cfg.eps_global,
+                phase_name="P0",
+                eps_value=None if p0_uses_eps_input else cfg.eps_global,
                 cy=cfg.cy,
-                pred_scale=p1_solution_scale,
+                pred_scale=p0_solution_scale,
                 plot_vector_l2_hist=plot_vector_l2_hist,
-                phase_tag=p1_phase_tag,
+                phase_tag=p0_phase_tag,
             )
         else:
-            msg = f"[P1] output_part={p1_output_part_label}: skip plot_error_dis."
+            msg = f"[P0] output_part={p0_output_part_label}: skip plot_error_dis."
             print(msg)
-            p1_log(msg)
+            p0_log(msg)
     elif run_transfer_only:
-        transfer_phase_name = "phase2_only" if run_phase2_only else "phase3_only"
-        msg = f"[P1] {transfer_phase_name}=True: skip P1 training/plots/checks."
+        transfer_phase_name = "phase1_only" if run_phase1_only else "phase2_only"
+        msg = f"[P0] {transfer_phase_name}=True: skip P0 training/plots/checks."
         print(msg)
-        p1_log(msg)
+        p0_log(msg)
     else:
-        msg = "[P1] train_two_phase_only=True: skip plot_losses/post_train_check/plot_error."
+        msg = "[P0] train_two_phase_only=True: skip plot_losses/post_train_check/plot_error."
         print(msg)
-        p1_log(msg)
-    phase1_elapsed = time.perf_counter() - phase1_t0
-    phase1_msg = f"[P1] elapsed: {_format_elapsed(phase1_elapsed)} ({phase1_elapsed:.2f}s)"
-    print(phase1_msg)
-    p1_log(phase1_msg)
-    if p1_log_file is not None:
-        p1_log_file.close()
-        print(f"[saved] P1 log to [{p1_log_short}]")
+        p0_log(msg)
+    phase0_elapsed = time.perf_counter() - phase0_t0
+    phase0_msg = f"[P0] elapsed: {_format_elapsed(phase0_elapsed)} ({phase0_elapsed:.2f}s)"
+    print(phase0_msg)
+    p0_log(phase0_msg)
+    if p0_log_file is not None:
+        p0_log_file.close()
+        print(f"[saved] P0 log to [{p0_log_short}]")
     else:
-        print("[Mode] transfer-only=True: existing P1 log is kept unchanged.")
+        print("[Mode] transfer-only=True: existing P0 log is kept unchanged.")
 
-    if (not enable_phase2) and (not enable_phase3):
-        print("\n[Mode] enable_phase2=False and enable_phase3=False -> no transfer phase to run.")
+    if (not enable_phase1) and (not enable_phase2):
+        print("\n[Mode] enable_phase1=False and enable_phase2=False -> no transfer phase to run.")
         print("\n----- ALL TRAINING COMPLETE -----\n")
         return
 
-    if enable_phase2:
+    if enable_phase1:
         # ============================================================
-        # Phase 2: Transfer learning for 2-site 1-loop bubble (3D input)
+        # Phase 1: Transfer learning for 2-site 1-loop bubble (3D input)
         # ============================================================
         print(
-            f"\n------ Phase 2: Transfer to 1-loop Bubble "
-            f"(fixed eps={cfg.eps_global}, output={p2_output_part_label}) ------"
+            f"\n------ Phase 1: Transfer to 1-loop Bubble "
+            f"(fixed eps={cfg.eps_global}, output={p1_output_part_label}) ------"
         )
-        phase2_t0 = time.perf_counter()
+        phase1_t0 = time.perf_counter()
 
-        p2_bundle_meta = {}
-        if p2_eval_bundle_load_path is not None:
-            x_coll_1loop, x_b_tensor_1loop, bc_target_1loop, p2_bundle_meta = _load_eval_bundle(
-                p2_eval_bundle_load_path,
+        p1_bundle_meta = {}
+        if p1_eval_bundle_load_path is not None:
+            x_coll_1loop, x_b_tensor_1loop, bc_target_1loop, p1_bundle_meta = _load_eval_bundle(
+                p1_eval_bundle_load_path,
                 device,
             )
-            print(f"[loaded] P2 eval-bundle from [{p2_eval_bundle_load_path}]")
+            print(f"[loaded] P1 eval-bundle from [{p1_eval_bundle_load_path}]")
             b_part_norm = _normalize_output_part(
-                p2_bundle_meta.get("output_part", p2_output_part),
-                default=p2_output_part,
+                p1_bundle_meta.get("output_part", p1_output_part),
+                default=p1_output_part,
             )
-            if b_part_norm != p2_output_part:
+            if b_part_norm != p1_output_part:
                 print(
-                    f"[Warn] loaded P2 eval-bundle output_part={b_part_norm} "
-                    f"!= config phase2_output_part={p2_output_part}; applying config selection."
+                    f"[Warn] loaded P1 eval-bundle output_part={b_part_norm} "
+                    f"!= config phase1_output_part={p1_output_part}; applying config selection."
                 )
         else:
             x_coll_1loop, x_b_tensor_1loop, bc_target_1loop, _ = build_inputs_and_boundary_1loop(
@@ -1375,55 +1382,55 @@ def main():
                 cfg.eps_global,
                 device,
                 compute_function_target=False,
-                output_part=p2_output_part,
-                target_total_bc=p2_target_total_bc,
-                n_bc_edge=p2_n_bc_edge,
-                n_face_pts=p2_n_face_pts,
-                n_corner_extra=p2_n_corner_extra,
-                bc_abs_cap=p2_bc_abs_cap,
+                output_part=p1_output_part,
+                target_total_bc=p1_target_total_bc,
+                n_bc_edge=p1_n_bc_edge,
+                n_face_pts=p1_n_face_pts,
+                n_corner_extra=p1_n_corner_extra,
+                bc_abs_cap=p1_bc_abs_cap,
             )
-        bc_target_1loop = _slice_phase1_target_by_part(
+        bc_target_1loop = _slice_phase0_target_by_part(
             bc_target_1loop,
             n_basis=cfg.n_basis_1loop,
-            output_part=p2_output_part,
-            tensor_name="P2 bc_target",
+            output_part=p1_output_part,
+            tensor_name="P1 bc_target",
         )
         if solution_scale_mode == "auto":
             (
-                p2_solution_scale,
-                p2_bc_mean_abs,
-                p2_raw_solution_scale,
-                p2_scale_capped,
-                p2_scale_floored,
+                p1_solution_scale,
+                p1_bc_mean_abs,
+                p1_raw_solution_scale,
+                p1_scale_capped,
+                p1_scale_floored,
             ) = _auto_solution_scale_from_bc(
                 bc_target_1loop,
                 ref_mean_abs=solution_scale_ref_mean,
-                max_scale=p2_solution_scale_max,
-                min_scale=p2_solution_scale_min,
+                max_scale=p1_solution_scale_max,
+                min_scale=p1_solution_scale_min,
             )
-            p2_scale_flags = []
-            if p2_scale_capped:
-                p2_scale_flags.append(f"capped@{p2_solution_scale_max:.3e}")
-            if p2_scale_floored:
-                p2_scale_flags.append(f"floored@{p2_solution_scale_min:.3e}")
-            p2_scale_flag_text = f" ({', '.join(p2_scale_flags)})" if p2_scale_flags else ""
+            p1_scale_flags = []
+            if p1_scale_capped:
+                p1_scale_flags.append(f"capped@{p1_solution_scale_max:.3e}")
+            if p1_scale_floored:
+                p1_scale_flags.append(f"floored@{p1_solution_scale_min:.3e}")
+            p1_scale_flag_text = f" ({', '.join(p1_scale_flags)})" if p1_scale_flags else ""
             print(
-                f"[P2] auto solution scale from BC mean abs={p2_bc_mean_abs:.3e} "
-                f"-> raw={p2_raw_solution_scale:.3e}, used={p2_solution_scale:.3e}"
-                f"{p2_scale_flag_text}"
+                f"[P1] auto solution scale from BC mean abs={p1_bc_mean_abs:.3e} "
+                f"-> raw={p1_raw_solution_scale:.3e}, used={p1_solution_scale:.3e}"
+                f"{p1_scale_flag_text}"
             )
-        bc_target_1loop_train = bc_target_1loop * p2_solution_scale
+        bc_target_1loop_train = bc_target_1loop * p1_solution_scale
     
         if x_coll_1loop.shape[1] != 3:
             raise ValueError(
                 f"x_coll_1loop must have 3 columns (x1,x2,y1). Got shape: {tuple(x_coll_1loop.shape)}"
             )
     
-        model_p2 = TransferPinnModel(
+        model_p1 = TransferPinnModel(
             cfg,
-            phase1_model=model_base,
+            phase0_model=model_base,
             freeze_core=True,
-            output_part=p2_output_part,
+            output_part=p1_output_part,
         ).to(device)
     
         from tl_two_site_bubble.mat_data_1loop import (
@@ -1465,185 +1472,191 @@ def main():
             cy_val=cfg.cy_1loop,
         ).to(device)
     
-        p2_log_file, p2_log_short, p2_log = _open_phase_log_writer(
-            phase=2,
+        p1_log_file, p1_log_short, p1_log = _open_phase_log_writer(
+            phase=1,
             cy=cfg.cy_1loop,
             eps_global=cfg.eps_global,
-            phase_tag=p2_phase_tag,
-            output_part_tag=p2_output_part_tag,
-            log_suffix=(f"clip_{_make_eps_tag(grad_clip_max_norm)}" if use_clip_gn_phase2 else None),
+            phase_tag=p1_phase_tag,
+            output_part_tag=p1_output_part_tag,
+            log_suffix=(
+                f"clip_{_make_eps_tag(grad_clip_max_norm_phase1)}"
+                if use_clip_gn_phase1
+                else None
+            ),
         )
-        p2_log(
-            f"[P2] eps_global={cfg.eps_global}, cy={cfg.cy_1loop}, "
-            f"output_part={p2_output_part_label}, solution_scale={p2_solution_scale:g}"
+        p1_log(
+            f"[P1] eps_global={cfg.eps_global}, cy={cfg.cy_1loop}, "
+            f"output_part={p1_output_part_label}, solution_scale={p1_solution_scale:g}"
         )
-        if use_clip_gn_phase2:
-            p2_log(f"[P2] grad clip enabled: clip_max_norm={grad_clip_max_norm:g}")
-        if run_phase2_only:
-            p2_log("[P1 transfer context]")
-            for msg in p1_transfer_log_messages:
-                p2_log(msg)
-            p2_log("[P1] run_phase2_only=True: existing P1 log file kept unchanged.")
+        if use_clip_gn_phase1:
+            p1_log(
+                f"[P1] grad clip enabled: clip_max_norm={grad_clip_max_norm_phase1:g}"
+            )
+        if run_phase1_only:
+            p1_log("[P0 transfer context]")
+            for msg in p0_transfer_log_messages:
+                p1_log(msg)
+            p1_log("[P0] run_phase1_only=True: existing P0 log file kept unchanged.")
     
-        hist_tot_p2 = None
-        hist_cde_p2 = None
-        hist_bc_p2 = None
-        p2_train_info = {}
-        if p2_model_load_path is not None:
-            print("\n------ Phase 2: Load 1-loop checkpoint ------")
-            p2_meta = _load_model_checkpoint(model_p2, p2_model_load_path, device)
-            if isinstance(p2_meta, dict) and ("output_part" in p2_meta):
-                ckpt_part = _normalize_output_part(p2_meta["output_part"])
-                if ckpt_part != p2_output_part:
+        hist_tot_p1 = None
+        hist_cde_p1 = None
+        hist_bc_p1 = None
+        p1_train_info = {}
+        if p1_model_load_path is not None:
+            print("\n------ Phase 1: Load 1-loop checkpoint ------")
+            p1_meta = _load_model_checkpoint(model_p1, p1_model_load_path, device)
+            if isinstance(p1_meta, dict) and ("output_part" in p1_meta):
+                ckpt_part = _normalize_output_part(p1_meta["output_part"])
+                if ckpt_part != p1_output_part:
                     warn_msg = (
-                        f"[Warn] P2 checkpoint output_part={ckpt_part} "
-                        f"!= config phase2_output_part={p2_output_part}."
+                        f"[Warn] P1 checkpoint output_part={ckpt_part} "
+                        f"!= config phase1_output_part={p1_output_part}."
                     )
                     print(warn_msg)
-                    p2_log(warn_msg)
-            print(f"[loaded] P2 checkpoint from [{p2_model_load_path}]")
-            p2_log(f"[P2] loaded checkpoint: {p2_model_load_path}")
+                    p1_log(warn_msg)
+            print(f"[loaded] P1 checkpoint from [{p1_model_load_path}]")
+            p1_log(f"[P1] loaded checkpoint: {p1_model_load_path}")
     
-            if isinstance(p2_meta, dict) and ("pred_scale" in p2_meta):
-                p2_solution_scale = float(p2_meta["pred_scale"])
-                msg = f"[P2] use pred_scale from checkpoint: {p2_solution_scale:g}"
+            if isinstance(p1_meta, dict) and ("pred_scale" in p1_meta):
+                p1_solution_scale = float(p1_meta["pred_scale"])
+                msg = f"[P1] use pred_scale from checkpoint: {p1_solution_scale:g}"
                 print(msg)
-                p2_log(msg)
-            elif "pred_scale" in p2_bundle_meta:
-                p2_solution_scale = float(p2_bundle_meta["pred_scale"])
-                msg = f"[P2] use pred_scale from eval-bundle: {p2_solution_scale:g}"
+                p1_log(msg)
+            elif "pred_scale" in p1_bundle_meta:
+                p1_solution_scale = float(p1_bundle_meta["pred_scale"])
+                msg = f"[P1] use pred_scale from eval-bundle: {p1_solution_scale:g}"
                 print(msg)
-                p2_log(msg)
+                p1_log(msg)
     
-            loaded_hist_p2 = _load_loss_history(p2_history_load_path)
-            if loaded_hist_p2 is not None:
-                hist_tot_p2, hist_cde_p2, hist_bc_p2 = loaded_hist_p2
-                msg = f"[P2] loaded loss history from [{p2_history_load_path}]"
+            loaded_hist_p1 = _load_loss_history(p1_history_load_path)
+            if loaded_hist_p1 is not None:
+                hist_tot_p1, hist_cde_p1, hist_bc_p1 = loaded_hist_p1
+                msg = f"[P1] loaded loss history from [{p1_history_load_path}]"
                 print(msg)
-                p2_log(msg)
+                p1_log(msg)
             else:
-                msg = "[P2] no loss history found for loaded checkpoint."
+                msg = "[P1] no loss history found for loaded checkpoint."
                 print(msg)
-                p2_log(msg)
+                p1_log(msg)
         else:
-            def cde_fixed_p2(model, a_builder, x_batch, n_basis, eps_val):
+            def cde_fixed_p1(model, a_builder, x_batch, n_basis, eps_val):
                 return cde_residual_loss_fixed_eps_1loop(
                     model,
                     a_builder,
                     x_batch,
                     n_basis,
                     eps_val=eps_val,
-                    output_part=p2_output_part,
+                    output_part=p1_output_part,
                 )
     
             (
-                model_p2,
-                hist_tot_p2,
-                hist_cde_p2,
-                hist_bc_p2,
-                p2_train_info,
+                model_p1,
+                hist_tot_p1,
+                hist_cde_p1,
+                hist_bc_p1,
+                p1_train_info,
             ) = train_model_fixed_eps(
-                model=model_p2,
+                model=model_p1,
                 a_builder=a_builder_1loop,
                 x_coll=x_coll_1loop,
                 x_b_tensor=x_b_tensor_1loop,
                 bc_target=bc_target_1loop_train,
-                cde_loss_fixed_fn=cde_fixed_p2,
-                bc_loss_fn=boundary_loss_cfg_p2,
+                cde_loss_fixed_fn=cde_fixed_p1,
+                bc_loss_fn=boundary_loss_cfg_p1,
                 n_basis=cfg.n_basis_1loop,
                 eps_val=cfg.eps_global,
-                lr_init=cfg.learning_rate_p2,
-                warmup_len=cfg.warmup_epochs_p2,
-                total_epochs=cfg.phase2_epochs,
+                lr_init=cfg.learning_rate_p1,
+                warmup_len=cfg.warmup_epochs_p1,
+                total_epochs=cfg.phase1_epochs,
                 lam1=cfg.lambda1,
                 lam2=cfg.lambda2,
                 cosine_min_lr=cfg.cosine_min_lr,
                 print_every=cfg.print_every,
-                phase_name="P2",
-                log_fn=p2_log,
-                use_grad_norm_probe=use_clip_gn_phase2,
-                grad_clip_max_norm=grad_clip_max_norm,
+                phase_name="P1",
+                log_fn=p1_log,
+                use_grad_norm_probe=use_clip_gn_phase1,
+                grad_clip_max_norm=grad_clip_max_norm_phase1,
             )
     
             if save_phase_artifacts:
-                saved_paths_p2 = _save_phase_artifacts(
-                    model=model_p2,
-                    hist_tot=hist_tot_p2,
-                    hist_cde=hist_cde_p2,
-                    hist_bc=hist_bc_p2,
-                    phase=2,
+                saved_paths_p1 = _save_phase_artifacts(
+                    model=model_p1,
+                    hist_tot=hist_tot_p1,
+                    hist_cde=hist_cde_p1,
+                    hist_bc=hist_bc_p1,
+                    phase=1,
                     cy=cfg.cy_1loop,
                     eps_global=cfg.eps_global,
-                    pred_scale=p2_solution_scale,
+                    pred_scale=p1_solution_scale,
                     extra_meta={
                         "in_dim": 3,
                         "n_basis": int(cfg.n_basis_1loop),
-                        "output_part": p2_output_part,
-                        "phase1_model_ref": p1_artifacts["model_short"],
-                        **p2_train_info,
+                        "output_part": p1_output_part,
+                        "phase0_model_ref": p0_artifacts["model_short"],
+                        **p1_train_info,
                     },
-                    phase_tag=p2_phase_tag,
-                    output_part_tag=p2_output_part_tag,
+                    phase_tag=p1_phase_tag,
+                    output_part_tag=p1_output_part_tag,
                 )
-                print(f"[saved] {os.path.basename(saved_paths_p2['model_abs'])} to [{os.path.dirname(saved_paths_p2['model_short'])}]")
-                print(f"[saved] {os.path.basename(saved_paths_p2['history_abs'])} to [{os.path.dirname(saved_paths_p2['history_short'])}]")
-                p2_log(f"[P2] saved checkpoint: {saved_paths_p2['model_short']}")
-                p2_log(f"[P2] saved loss history: {saved_paths_p2['history_short']}")
+                print(f"[saved] {os.path.basename(saved_paths_p1['model_abs'])} to [{os.path.dirname(saved_paths_p1['model_short'])}]")
+                print(f"[saved] {os.path.basename(saved_paths_p1['history_abs'])} to [{os.path.dirname(saved_paths_p1['history_short'])}]")
+                p1_log(f"[P1] saved checkpoint: {saved_paths_p1['model_short']}")
+                p1_log(f"[P1] saved loss history: {saved_paths_p1['history_short']}")
     
         if save_eval_bundle:
-            saved_bundle_p2 = _save_eval_bundle(
-                phase=2,
+            saved_bundle_p1 = _save_eval_bundle(
+                phase=1,
                 cy=cfg.cy_1loop,
                 eps_global=cfg.eps_global,
                 x_coll=x_coll_1loop,
                 x_b_tensor=x_b_tensor_1loop,
                 bc_target=bc_target_1loop,
-                pred_scale=p2_solution_scale,
+                pred_scale=p1_solution_scale,
                 extra_meta={
                     "in_dim": int(x_coll_1loop.shape[1]),
                     "n_basis": int(cfg.n_basis_1loop),
-                    "output_part": p2_output_part,
-                    "phase1_model_ref": p1_artifacts["model_short"],
-                    **p2_train_info,
+                    "output_part": p1_output_part,
+                    "phase0_model_ref": p0_artifacts["model_short"],
+                    **p1_train_info,
                 },
-                phase_tag=p2_phase_tag,
-                output_part_tag=p2_output_part_tag,
+                phase_tag=p1_phase_tag,
+                output_part_tag=p1_output_part_tag,
             )
-            print(f"[saved] {os.path.basename(saved_bundle_p2['bundle_abs'])} to [{os.path.dirname(saved_bundle_p2['bundle_short'])}]")
-            p2_log(f"[P2] saved eval-bundle: {saved_bundle_p2['bundle_short']}")
+            print(f"[saved] {os.path.basename(saved_bundle_p1['bundle_abs'])} to [{os.path.dirname(saved_bundle_p1['bundle_short'])}]")
+            p1_log(f"[P1] saved eval-bundle: {saved_bundle_p1['bundle_short']}")
     
         if not train_two_phase_only:
-            if (hist_tot_p2 is not None) and (hist_cde_p2 is not None) and (hist_bc_p2 is not None):
+            if (hist_tot_p1 is not None) and (hist_cde_p1 is not None) and (hist_bc_p1 is not None):
                 plot_losses(
-                    total_vals=hist_tot_p2,
-                    cde_vals=hist_cde_p2,
-                    bc_vals=hist_bc_p2,
+                    total_vals=hist_tot_p1,
+                    cde_vals=hist_cde_p1,
+                    bc_vals=hist_bc_p1,
                     title=rf"2-site 1-loop bubble, $c={cfg.cy_1loop}$, $\varepsilon={cfg.eps_global:g}$",
                     cy=cfg.cy_1loop,
                     save_dir="1_losses",
-                    fname=f"P2_loss_all_eps_{eps_tag}{p2_loss_name_suffix}.png",
-                    fname2=f"P2_loss_total_eps_{eps_tag}{p2_loss_name_suffix}.png",
-                    phase=2,
-                    phase_tag=p2_phase_tag,
+                    fname=f"P1_loss_all_eps_{eps_tag}{p1_loss_name_suffix}.png",
+                    fname2=f"P1_loss_total_eps_{eps_tag}{p1_loss_name_suffix}.png",
+                    phase=1,
+                    phase_tag=p1_phase_tag,
                 )
             else:
-                msg = "[P2] skip plot_losses: loss history unavailable."
+                msg = "[P1] skip plot_losses: loss history unavailable."
                 print(msg)
-                p2_log(msg)
+                p1_log(msg)
     
             with torch.no_grad():
                 f_target_1loop = compute_function_target_from_xcoll_1loop(
                     x_coll_1loop,
                     cy_val=cfg.cy_1loop,
                     eps_val=cfg.eps_global,
-                    output_part=p2_output_part,
+                    output_part=p1_output_part,
                     num_workers=postcalc_num_workers,
                     chunk_size=postcalc_chunk_size,
                     parallel_min_points=postcalc_parallel_min_points,
                 )
     
             post_train_check(
-                model=model_p2,
+                model=model_p1,
                 x_coll=x_coll_1loop,
                 x_b_tensor=x_b_tensor_1loop,
                 bc_target=bc_target_1loop,
@@ -1651,68 +1664,74 @@ def main():
                 eps_global=cfg.eps_global,
                 compute_function_target_from_xcoll=compute_function_target_from_xcoll_1loop,
                 precomputed_true=f_target_1loop,
-                phase_name="P2",
-                pred_scale=p2_solution_scale,
-                log_fn=p2_log,
-                output_part=p2_output_part,
+                phase_name="P1",
+                pred_scale=p1_solution_scale,
+                log_fn=p1_log,
+                output_part=p1_output_part,
             )
     
-            if p2_output_part == "both":
+            if p1_output_part == "both":
                 plot_error_dis(
-                    model=model_p2,
+                    model=model_p1,
                     x_coll=x_coll_1loop,
                     function_target=f_target_1loop,
-                    phase_name="P2",
+                    phase_name="P1",
                     eps_value=cfg.eps_global,
                     cy_loop=cfg.cy_1loop,
-                    pred_scale=p2_solution_scale,
+                    pred_scale=p1_solution_scale,
                     plot_vector_l2_hist=plot_vector_l2_hist,
-                    phase_tag=p2_phase_tag,
+                    phase_tag=p1_phase_tag,
                 )
             else:
-                msg = f"[P2] output_part={p2_output_part_label}: skip plot_error_dis."
+                msg = f"[P1] output_part={p1_output_part_label}: skip plot_error_dis."
                 print(msg)
-                p2_log(msg)
+                p1_log(msg)
         else:
-            msg = "[P2] train_two_phase_only=True: skip plot_losses/post_train_check/plot_error."
+            msg = "[P1] train_two_phase_only=True: skip plot_losses/post_train_check/plot_error."
             print(msg)
-            p2_log(msg)
-        phase2_elapsed = time.perf_counter() - phase2_t0
-        phase2_msg = f"[P2] elapsed: {_format_elapsed(phase2_elapsed)} ({phase2_elapsed:.2f}s)"
-        print(phase2_msg)
-        p2_log(phase2_msg)
-        p2_log_file.close()
-        print(f"[saved] P2 log to [{p2_log_short}]")
+            p1_log(msg)
+        phase1_elapsed = time.perf_counter() - phase1_t0
+        phase1_msg = f"[P1] elapsed: {_format_elapsed(phase1_elapsed)} ({phase1_elapsed:.2f}s)"
+        print(phase1_msg)
+        p1_log(phase1_msg)
+        p1_log_file.close()
+        print(f"[saved] P1 log to [{p1_log_short}]")
 
-    elif enable_phase3:
+    elif enable_phase2:
         # ============================================================
-        # Phase 3: Transfer learning for 2-site 2-loop sunset (4D input)
+        # Phase 2: Transfer learning for 2-site 2-loop sunset (4D input)
         # ============================================================
         print(
-            f"\n------ Phase 3: Transfer to 2-loop Sunset "
-            f"(fixed eps={cfg.eps_global}, output={p3_output_part_label}) ------"
+            f"\n------ Phase 2: Transfer to 2-loop Sunset "
+            f"(fixed eps={cfg.eps_global}, output={p2_output_part_label}) ------"
         )
-        phase3_t0 = time.perf_counter()
+        phase2_t0 = time.perf_counter()
 
-        p3_phase3_epochs = int(getattr(cfg, "phase3_epochs", getattr(cfg, "phase2_epochs", 2000)))
-        p3_warmup_epochs = int(getattr(cfg, "warmup_epochs_p3", getattr(cfg, "warmup_epochs_p2", 200)))
-        p3_lr = float(getattr(cfg, "learning_rate_p3", getattr(cfg, "learning_rate_p2", 1e-3)))
+        phase2_epochs = int(
+            getattr(cfg, "phase2_epochs", getattr(cfg, "phase1_epochs", 2000))
+        )
+        phase2_warmup_epochs = int(
+            getattr(cfg, "warmup_epochs_p2", getattr(cfg, "warmup_epochs_p1", 200))
+        )
+        phase2_learning_rate = float(
+            getattr(cfg, "learning_rate_p2", getattr(cfg, "learning_rate_p1", 1e-3))
+        )
 
-        p3_bundle_meta = {}
-        if p3_eval_bundle_load_path is not None:
-            x_coll_2loop, x_b_tensor_2loop, bc_target_2loop, p3_bundle_meta = _load_eval_bundle(
-                p3_eval_bundle_load_path,
+        p2_bundle_meta = {}
+        if p2_eval_bundle_load_path is not None:
+            x_coll_2loop, x_b_tensor_2loop, bc_target_2loop, p2_bundle_meta = _load_eval_bundle(
+                p2_eval_bundle_load_path,
                 device,
             )
-            print(f"[loaded] P3 eval-bundle from [{p3_eval_bundle_load_path}]")
+            print(f"[loaded] P2 eval-bundle from [{p2_eval_bundle_load_path}]")
             b_part_norm = _normalize_output_part(
-                p3_bundle_meta.get("output_part", p3_output_part),
-                default=p3_output_part,
+                p2_bundle_meta.get("output_part", p2_output_part),
+                default=p2_output_part,
             )
-            if b_part_norm != p3_output_part:
+            if b_part_norm != p2_output_part:
                 print(
-                    f"[Warn] loaded P3 eval-bundle output_part={b_part_norm} "
-                    f"!= config phase3_output_part={p3_output_part}; applying config selection."
+                    f"[Warn] loaded P2 eval-bundle output_part={b_part_norm} "
+                    f"!= config phase2_output_part={p2_output_part}; applying config selection."
                 )
         else:
             x_coll_2loop, x_b_tensor_2loop, bc_target_2loop, _ = build_inputs_and_boundary_2loop(
@@ -1729,47 +1748,47 @@ def main():
                 cfg.eps_global,
                 device,
                 compute_function_target=False,
-                output_part=p3_output_part,
-                target_total_bc=p3_target_total_bc,
-                n_bc_edge=p3_n_bc_edge,
-                n_face_pts=p3_n_face_pts,
-                n_cell_pts=p3_n_cell_pts,
-                n_corner_extra=p3_n_corner_extra,
-                bc_abs_cap=p3_bc_abs_cap,
+                output_part=p2_output_part,
+                target_total_bc=p2_target_total_bc,
+                n_bc_edge=p2_n_bc_edge,
+                n_face_pts=p2_n_face_pts,
+                n_cell_pts=p2_n_cell_pts,
+                n_corner_extra=p2_n_corner_extra,
+                bc_abs_cap=p2_bc_abs_cap,
                 n_basis=n_basis_2loop,
             )
 
-        bc_target_2loop = _slice_phase1_target_by_part(
+        bc_target_2loop = _slice_phase0_target_by_part(
             bc_target_2loop,
             n_basis=n_basis_2loop,
-            output_part=p3_output_part,
-            tensor_name="P3 bc_target",
+            output_part=p2_output_part,
+            tensor_name="P2 bc_target",
         )
         if solution_scale_mode == "auto":
             (
-                p3_solution_scale,
-                p3_bc_mean_abs,
-                p3_raw_solution_scale,
-                p3_scale_capped,
-                p3_scale_floored,
+                p2_solution_scale,
+                p2_bc_mean_abs,
+                p2_raw_solution_scale,
+                p2_scale_capped,
+                p2_scale_floored,
             ) = _auto_solution_scale_from_bc(
                 bc_target_2loop,
                 ref_mean_abs=solution_scale_ref_mean,
-                max_scale=p3_solution_scale_max,
-                min_scale=p3_solution_scale_min,
+                max_scale=p2_solution_scale_max,
+                min_scale=p2_solution_scale_min,
             )
-            p3_scale_flags = []
-            if p3_scale_capped:
-                p3_scale_flags.append(f"capped@{p3_solution_scale_max:.3e}")
-            if p3_scale_floored:
-                p3_scale_flags.append(f"floored@{p3_solution_scale_min:.3e}")
-            p3_scale_flag_text = f" ({', '.join(p3_scale_flags)})" if p3_scale_flags else ""
+            p2_scale_flags = []
+            if p2_scale_capped:
+                p2_scale_flags.append(f"capped@{p2_solution_scale_max:.3e}")
+            if p2_scale_floored:
+                p2_scale_flags.append(f"floored@{p2_solution_scale_min:.3e}")
+            p2_scale_flag_text = f" ({', '.join(p2_scale_flags)})" if p2_scale_flags else ""
             print(
-                f"[P3] auto solution scale from BC mean abs={p3_bc_mean_abs:.3e} "
-                f"-> raw={p3_raw_solution_scale:.3e}, used={p3_solution_scale:.3e}"
-                f"{p3_scale_flag_text}"
+                f"[P2] auto solution scale from BC mean abs={p2_bc_mean_abs:.3e} "
+                f"-> raw={p2_raw_solution_scale:.3e}, used={p2_solution_scale:.3e}"
+                f"{p2_scale_flag_text}"
             )
-        bc_target_2loop_train = bc_target_2loop * p3_solution_scale
+        bc_target_2loop_train = bc_target_2loop * p2_solution_scale
 
         if x_coll_2loop.shape[1] != 4:
             raise ValueError(
@@ -1777,11 +1796,11 @@ def main():
                 f"Got shape: {tuple(x_coll_2loop.shape)}"
             )
 
-        model_p3 = TransferPinnModel(
+        model_p2 = TransferPinnModel(
             cfg,
-            phase1_model=model_base,
+            phase0_model=model_base,
             freeze_core=True,
-            output_part=p3_output_part,
+            output_part=p2_output_part,
             target_in_dim=4,
             target_n_basis=n_basis_2loop,
         ).to(device)
@@ -1902,191 +1921,191 @@ def main():
             cy_val=cy_2loop,
         ).to(device)
 
-        p3_log_file, p3_log_short, p3_log = _open_phase_log_writer(
-            phase=3,
+        p2_log_file, p2_log_short, p2_log = _open_phase_log_writer(
+            phase=2,
             cy=cy_2loop,
             eps_global=cfg.eps_global,
-            phase_tag=p3_phase_tag,
-            output_part_tag=p3_output_part_tag,
+            phase_tag=p2_phase_tag,
+            output_part_tag=p2_output_part_tag,
             log_suffix=(
-                f"clip_{_make_eps_tag(grad_clip_max_norm_phase3)}"
-                if use_clip_gn_phase3
+                f"clip_{_make_eps_tag(grad_clip_max_norm_phase2)}"
+                if use_clip_gn_phase2
                 else None
             ),
         )
-        p3_log(
-            f"[P3] eps_global={cfg.eps_global}, cy={cy_2loop}, "
-            f"output_part={p3_output_part_label}, solution_scale={p3_solution_scale:g}"
+        p2_log(
+            f"[P2] eps_global={cfg.eps_global}, cy={cy_2loop}, "
+            f"output_part={p2_output_part_label}, solution_scale={p2_solution_scale:g}"
         )
-        if use_clip_gn_phase3:
-            p3_log(f"[P3] grad clip enabled: clip_max_norm={grad_clip_max_norm_phase3:g}")
-        if run_phase3_only:
-            p3_log("[P1 transfer context]")
-            for msg in p1_transfer_log_messages:
-                p3_log(msg)
-            p3_log("[P1] run_phase3_only=True: existing P1 log file kept unchanged.")
+        if use_clip_gn_phase2:
+            p2_log(f"[P2] grad clip enabled: clip_max_norm={grad_clip_max_norm_phase2:g}")
+        if run_phase2_only:
+            p2_log("[P0 transfer context]")
+            for msg in p0_transfer_log_messages:
+                p2_log(msg)
+            p2_log("[P0] run_phase2_only=True: existing P0 log file kept unchanged.")
 
-        hist_tot_p3 = None
-        hist_cde_p3 = None
-        hist_bc_p3 = None
-        p3_train_info = {}
-        if p3_model_load_path is not None:
-            print("\n------ Phase 3: Load 2-loop checkpoint ------")
-            p3_meta = _load_model_checkpoint(model_p3, p3_model_load_path, device)
-            if isinstance(p3_meta, dict) and ("output_part" in p3_meta):
-                ckpt_part = _normalize_output_part(p3_meta["output_part"])
-                if ckpt_part != p3_output_part:
+        hist_tot_p2 = None
+        hist_cde_p2 = None
+        hist_bc_p2 = None
+        p2_train_info = {}
+        if p2_model_load_path is not None:
+            print("\n------ Phase 2: Load 2-loop checkpoint ------")
+            p2_meta = _load_model_checkpoint(model_p2, p2_model_load_path, device)
+            if isinstance(p2_meta, dict) and ("output_part" in p2_meta):
+                ckpt_part = _normalize_output_part(p2_meta["output_part"])
+                if ckpt_part != p2_output_part:
                     warn_msg = (
-                        f"[Warn] P3 checkpoint output_part={ckpt_part} "
-                        f"!= config phase3_output_part={p3_output_part}."
+                        f"[Warn] P2 checkpoint output_part={ckpt_part} "
+                        f"!= config phase2_output_part={p2_output_part}."
                     )
                     print(warn_msg)
-                    p3_log(warn_msg)
-            print(f"[loaded] P3 checkpoint from [{p3_model_load_path}]")
-            p3_log(f"[P3] loaded checkpoint: {p3_model_load_path}")
+                    p2_log(warn_msg)
+            print(f"[loaded] P2 checkpoint from [{p2_model_load_path}]")
+            p2_log(f"[P2] loaded checkpoint: {p2_model_load_path}")
 
-            if isinstance(p3_meta, dict) and ("pred_scale" in p3_meta):
-                p3_solution_scale = float(p3_meta["pred_scale"])
-                msg = f"[P3] use pred_scale from checkpoint: {p3_solution_scale:g}"
+            if isinstance(p2_meta, dict) and ("pred_scale" in p2_meta):
+                p2_solution_scale = float(p2_meta["pred_scale"])
+                msg = f"[P2] use pred_scale from checkpoint: {p2_solution_scale:g}"
                 print(msg)
-                p3_log(msg)
-            elif "pred_scale" in p3_bundle_meta:
-                p3_solution_scale = float(p3_bundle_meta["pred_scale"])
-                msg = f"[P3] use pred_scale from eval-bundle: {p3_solution_scale:g}"
+                p2_log(msg)
+            elif "pred_scale" in p2_bundle_meta:
+                p2_solution_scale = float(p2_bundle_meta["pred_scale"])
+                msg = f"[P2] use pred_scale from eval-bundle: {p2_solution_scale:g}"
                 print(msg)
-                p3_log(msg)
+                p2_log(msg)
 
-            loaded_hist_p3 = _load_loss_history(p3_history_load_path)
-            if loaded_hist_p3 is not None:
-                hist_tot_p3, hist_cde_p3, hist_bc_p3 = loaded_hist_p3
-                msg = f"[P3] loaded loss history from [{p3_history_load_path}]"
+            loaded_hist_p2 = _load_loss_history(p2_history_load_path)
+            if loaded_hist_p2 is not None:
+                hist_tot_p2, hist_cde_p2, hist_bc_p2 = loaded_hist_p2
+                msg = f"[P2] loaded loss history from [{p2_history_load_path}]"
                 print(msg)
-                p3_log(msg)
+                p2_log(msg)
             else:
-                msg = "[P3] no loss history found for loaded checkpoint."
+                msg = "[P2] no loss history found for loaded checkpoint."
                 print(msg)
-                p3_log(msg)
+                p2_log(msg)
         else:
-            def cde_fixed_p3(model, a_builder, x_batch, n_basis, eps_val):
+            def cde_fixed_p2(model, a_builder, x_batch, n_basis, eps_val):
                 return cde_residual_loss_fixed_eps_2loop(
                     model,
                     a_builder,
                     x_batch,
                     n_basis,
                     eps_val=eps_val,
-                    output_part=p3_output_part,
+                    output_part=p2_output_part,
                 )
 
             (
-                model_p3,
-                hist_tot_p3,
-                hist_cde_p3,
-                hist_bc_p3,
-                p3_train_info,
+                model_p2,
+                hist_tot_p2,
+                hist_cde_p2,
+                hist_bc_p2,
+                p2_train_info,
             ) = train_model_fixed_eps(
-                model=model_p3,
+                model=model_p2,
                 a_builder=a_builder_2loop,
                 x_coll=x_coll_2loop,
                 x_b_tensor=x_b_tensor_2loop,
                 bc_target=bc_target_2loop_train,
-                cde_loss_fixed_fn=cde_fixed_p3,
-                bc_loss_fn=boundary_loss_cfg_p3,
+                cde_loss_fixed_fn=cde_fixed_p2,
+                bc_loss_fn=boundary_loss_cfg_p2,
                 n_basis=n_basis_2loop,
                 eps_val=cfg.eps_global,
-                lr_init=p3_lr,
-                warmup_len=p3_warmup_epochs,
-                total_epochs=p3_phase3_epochs,
+                lr_init=phase2_learning_rate,
+                warmup_len=phase2_warmup_epochs,
+                total_epochs=phase2_epochs,
                 lam1=cfg.lambda1,
                 lam2=cfg.lambda2,
                 cosine_min_lr=cfg.cosine_min_lr,
                 print_every=cfg.print_every,
-                phase_name="P3",
-                log_fn=p3_log,
-                use_grad_norm_probe=use_clip_gn_phase3,
-                grad_clip_max_norm=grad_clip_max_norm_phase3,
+                phase_name="P2",
+                log_fn=p2_log,
+                use_grad_norm_probe=use_clip_gn_phase2,
+                grad_clip_max_norm=grad_clip_max_norm_phase2,
             )
 
             if save_phase_artifacts:
-                saved_paths_p3 = _save_phase_artifacts(
-                    model=model_p3,
-                    hist_tot=hist_tot_p3,
-                    hist_cde=hist_cde_p3,
-                    hist_bc=hist_bc_p3,
-                    phase=3,
+                saved_paths_p2 = _save_phase_artifacts(
+                    model=model_p2,
+                    hist_tot=hist_tot_p2,
+                    hist_cde=hist_cde_p2,
+                    hist_bc=hist_bc_p2,
+                    phase=2,
                     cy=cy_2loop,
                     eps_global=cfg.eps_global,
-                    pred_scale=p3_solution_scale,
+                    pred_scale=p2_solution_scale,
                     extra_meta={
                         "in_dim": 4,
                         "n_basis": int(n_basis_2loop),
-                        "output_part": p3_output_part,
-                        "phase1_model_ref": p1_artifacts["model_short"],
-                        **p3_train_info,
+                        "output_part": p2_output_part,
+                        "phase0_model_ref": p0_artifacts["model_short"],
+                        **p2_train_info,
                     },
-                    phase_tag=p3_phase_tag,
-                    output_part_tag=p3_output_part_tag,
+                    phase_tag=p2_phase_tag,
+                    output_part_tag=p2_output_part_tag,
                 )
                 print(
-                    f"[saved] {os.path.basename(saved_paths_p3['model_abs'])} "
-                    f"to [{os.path.dirname(saved_paths_p3['model_short'])}]"
+                    f"[saved] {os.path.basename(saved_paths_p2['model_abs'])} "
+                    f"to [{os.path.dirname(saved_paths_p2['model_short'])}]"
                 )
                 print(
-                    f"[saved] {os.path.basename(saved_paths_p3['history_abs'])} "
-                    f"to [{os.path.dirname(saved_paths_p3['history_short'])}]"
+                    f"[saved] {os.path.basename(saved_paths_p2['history_abs'])} "
+                    f"to [{os.path.dirname(saved_paths_p2['history_short'])}]"
                 )
-                p3_log(f"[P3] saved checkpoint: {saved_paths_p3['model_short']}")
-                p3_log(f"[P3] saved loss history: {saved_paths_p3['history_short']}")
+                p2_log(f"[P2] saved checkpoint: {saved_paths_p2['model_short']}")
+                p2_log(f"[P2] saved loss history: {saved_paths_p2['history_short']}")
 
         if save_eval_bundle:
-            saved_bundle_p3 = _save_eval_bundle(
-                phase=3,
+            saved_bundle_p2 = _save_eval_bundle(
+                phase=2,
                 cy=cy_2loop,
                 eps_global=cfg.eps_global,
                 x_coll=x_coll_2loop,
                 x_b_tensor=x_b_tensor_2loop,
                 bc_target=bc_target_2loop,
-                pred_scale=p3_solution_scale,
+                pred_scale=p2_solution_scale,
                 extra_meta={
                     "in_dim": int(x_coll_2loop.shape[1]),
                     "n_basis": int(n_basis_2loop),
-                    "output_part": p3_output_part,
-                    "phase1_model_ref": p1_artifacts["model_short"],
-                    **p3_train_info,
+                    "output_part": p2_output_part,
+                    "phase0_model_ref": p0_artifacts["model_short"],
+                    **p2_train_info,
                 },
-                phase_tag=p3_phase_tag,
-                output_part_tag=p3_output_part_tag,
+                phase_tag=p2_phase_tag,
+                output_part_tag=p2_output_part_tag,
             )
             print(
-                f"[saved] {os.path.basename(saved_bundle_p3['bundle_abs'])} "
-                f"to [{os.path.dirname(saved_bundle_p3['bundle_short'])}]"
+                f"[saved] {os.path.basename(saved_bundle_p2['bundle_abs'])} "
+                f"to [{os.path.dirname(saved_bundle_p2['bundle_short'])}]"
             )
-            p3_log(f"[P3] saved eval-bundle: {saved_bundle_p3['bundle_short']}")
+            p2_log(f"[P2] saved eval-bundle: {saved_bundle_p2['bundle_short']}")
 
         if not train_two_phase_only:
-            if (hist_tot_p3 is not None) and (hist_cde_p3 is not None) and (hist_bc_p3 is not None):
+            if (hist_tot_p2 is not None) and (hist_cde_p2 is not None) and (hist_bc_p2 is not None):
                 plot_losses(
-                    total_vals=hist_tot_p3,
-                    cde_vals=hist_cde_p3,
-                    bc_vals=hist_bc_p3,
+                    total_vals=hist_tot_p2,
+                    cde_vals=hist_cde_p2,
+                    bc_vals=hist_bc_p2,
                     title=rf"2-site 2-loop sunset, $c={cy_2loop}$, $\varepsilon={cfg.eps_global:g}$",
                     cy=cy_2loop,
                     save_dir="1_losses",
-                    fname=f"P3_loss_all_eps_{eps_tag}{p3_loss_name_suffix}.png",
-                    fname2=f"P3_loss_total_eps_{eps_tag}{p3_loss_name_suffix}.png",
-                    phase=3,
-                    phase_tag=p3_phase_tag,
+                    fname=f"P2_loss_all_eps_{eps_tag}{p2_loss_name_suffix}.png",
+                    fname2=f"P2_loss_total_eps_{eps_tag}{p2_loss_name_suffix}.png",
+                    phase=2,
+                    phase_tag=p2_phase_tag,
                 )
             else:
-                msg = "[P3] skip plot_losses: loss history unavailable."
+                msg = "[P2] skip plot_losses: loss history unavailable."
                 print(msg)
-                p3_log(msg)
+                p2_log(msg)
 
             with torch.no_grad():
                 f_target_2loop = compute_function_target_from_xcoll_2loop(
                     x_coll_2loop,
                     cy_val=cy_2loop,
                     eps_val=cfg.eps_global,
-                    output_part=p3_output_part,
+                    output_part=p2_output_part,
                     num_workers=postcalc_num_workers,
                     chunk_size=postcalc_chunk_size,
                     parallel_min_points=postcalc_parallel_min_points,
@@ -2094,7 +2113,7 @@ def main():
                 )
 
             post_train_check(
-                model=model_p3,
+                model=model_p2,
                 x_coll=x_coll_2loop,
                 x_b_tensor=x_b_tensor_2loop,
                 bc_target=bc_target_2loop,
@@ -2102,39 +2121,39 @@ def main():
                 eps_global=cfg.eps_global,
                 compute_function_target_from_xcoll=compute_function_target_from_xcoll_2loop,
                 precomputed_true=f_target_2loop,
-                phase_name="P3",
-                pred_scale=p3_solution_scale,
-                log_fn=p3_log,
-                output_part=p3_output_part,
+                phase_name="P2",
+                pred_scale=p2_solution_scale,
+                log_fn=p2_log,
+                output_part=p2_output_part,
             )
 
-            if p3_output_part == "both":
+            if p2_output_part == "both":
                 plot_error_dis(
-                    model=model_p3,
+                    model=model_p2,
                     x_coll=x_coll_2loop,
                     function_target=f_target_2loop,
-                    phase_name="P3",
+                    phase_name="P2",
                     eps_value=cfg.eps_global,
                     cy_loop=cy_2loop,
-                    pred_scale=p3_solution_scale,
+                    pred_scale=p2_solution_scale,
                     plot_vector_l2_hist=plot_vector_l2_hist,
-                    phase_tag=p3_phase_tag,
+                    phase_tag=p2_phase_tag,
                 )
             else:
-                msg = f"[P3] output_part={p3_output_part_label}: skip plot_error_dis."
+                msg = f"[P2] output_part={p2_output_part_label}: skip plot_error_dis."
                 print(msg)
-                p3_log(msg)
+                p2_log(msg)
         else:
-            msg = "[P3] train_two_phase_only=True: skip plot_losses/post_train_check/plot_error."
+            msg = "[P2] train_two_phase_only=True: skip plot_losses/post_train_check/plot_error."
             print(msg)
-            p3_log(msg)
+            p2_log(msg)
 
-        phase3_elapsed = time.perf_counter() - phase3_t0
-        phase3_msg = f"[P3] elapsed: {_format_elapsed(phase3_elapsed)} ({phase3_elapsed:.2f}s)"
-        print(phase3_msg)
-        p3_log(phase3_msg)
-        p3_log_file.close()
-        print(f"[saved] P3 log to [{p3_log_short}]")
+        phase2_elapsed = time.perf_counter() - phase2_t0
+        phase2_msg = f"[P2] elapsed: {_format_elapsed(phase2_elapsed)} ({phase2_elapsed:.2f}s)"
+        print(phase2_msg)
+        p2_log(phase2_msg)
+        p2_log_file.close()
+        print(f"[saved] P2 log to [{p2_log_short}]")
 
     print("\n----- ALL TRAINING COMPLETE -----\n")
 
