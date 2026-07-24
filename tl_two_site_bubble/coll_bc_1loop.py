@@ -90,7 +90,7 @@ def _torch_re_to_output_channels(re_vals: torch.Tensor, output_part="both") -> t
     return torch.zeros_like(re_vals)
 
 
-def _fast_p2_target_eps0(
+def _fast_p1_target_eps0(
     x_coll: torch.Tensor,
     *,
     cy_val: float,
@@ -157,7 +157,7 @@ def _fast_p2_target_eps0(
     return torch.tensor(function_concat, dtype=torch.float32, device=x_coll.device)
 
 
-def _fast_p2_target_negative_int(
+def _fast_p1_target_negative_int(
     x_coll: torch.Tensor,
     *,
     cy_val: float,
@@ -291,14 +291,14 @@ def compute_function_target_from_xcoll_1loop(
         x_tensor = torch.as_tensor(x_coll, dtype=torch.float32)
 
     if abs(float(eps_val)) < _EPS_TOL and _scipy_spence is not None:
-        return _fast_p2_target_eps0(
+        return _fast_p1_target_eps0(
             x_tensor,
             cy_val=float(cy_val),
             output_part=output_part,
         )
 
     if eps_to_n_int(float(eps_val)) is not None:
-        return _fast_p2_target_negative_int(
+        return _fast_p1_target_negative_int(
             x_tensor,
             cy_val=float(cy_val),
             eps_val=float(eps_val),
