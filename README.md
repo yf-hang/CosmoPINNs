@@ -22,19 +22,17 @@ The code implements a three-phase hierarchy:
 
 | Phase | Topology | Inputs | Re MI dim | Training role |
 | --- | --- | --- | ---: | --- |
-| Phase 0 | chain, $\ell = 0$ | `(u1, u2)` | 4 | source model |
-| Phase 1 | one-loop bubble, $\ell = 1$ | `(u1, u2, u3)` | 10 | transfer target |
-| Phase 2 | two-loop sunset, $\ell = 2$ | `(u1, u2, u3, u4)` | 22 | transfer target |
+| Phase 0 | chain ($\ell = 0$) | `(u1, u2)` | 4 | source model |
+| Phase 1 | one-loop bubble ($\ell = 1$) | `(u1, u2, u3)` | 10 | transfer target |
+| Phase 2 | two-loop sunset ($\ell = 2$) | `(u1, u2, u3, u4)` | 22 | transfer target |
 
-For transfer learning, the Phase-1 hidden representation is copied into the
-target model, frozen, and paired with new input and output layers matching the
-loop-level topology.
+For transfer learning, the Phase-0 hidden representation is copied into the target model, frozen, and paired with new input and output layers matching the loop-level topology.
 
 ## Scientific Setup
 
 The default numerical setup follows the manuscript:
 
-| Loop order $\ell$ | Collocation domain | Fixed scale | Collocation points | Boundary points | Epochs |
+| $\ell$ | Collocation domain | Fixed scale | Collocation points | Boundary points | Epochs |
 | --- | --- | ---: | ---: | ---: | ---: |
 | 0 | `[20,30] x [20,30]` | `c0 = 15` | `5e4` | `5e3` | `6000` |
 | 1 | `[30,40] x [30,40] x [15,20]` | `c1 = 5` | `1e5` | `1e4` | `8000` |
