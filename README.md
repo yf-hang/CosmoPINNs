@@ -4,6 +4,8 @@ CosmoPINNs is a physics-informed neural network (PINN) framework for solving the
 
 Some of the results are collected at: <https://yf-hang.github.io/CosmoPINNs/>
 
+The manuscript has been completed and will be posted on arXiv soon.
+
 ## Overview
 
 ### Canonical Differential Equation
