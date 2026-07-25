@@ -6,13 +6,28 @@ Some of the results are collected at: <https://yf-hang.github.io/CosmoPINNs/>
 
 ## Overview
 
+### Canonical Differential Equation
+The cosmological master integrals (MIs) $\{I_1,I_2,\ldots\}=\vec{I}$ satisfy following canonical differential equation (CDE)
+$$
+\mathrm{d}\vec{I}(\vec{z},\varepsilon) = \varepsilon\, [\mathrm{d}A(\vec{z})]\, \vec{I}(\vec{z},\varepsilon)
+$$
+where $\vec{z}=\{X_1,X_2,\ldots,Y_1,Y_2,\ldots\}$ is the set of all independent kinematic variables 
+$\varepsilon$ denotes the twistor factor, and $\mathrm{d}$ is the total differential $\mathrm{d}=\sum_i\mathrm{d} z_i\partial_{z_i}$.
+Moreover, $A(\vec{z})$ represents the connection matrix which can be further decomposed as
+$$
+A(\vec{z}) = \sum_{i} a_i\log[w_i(\vec{z})] 
+$$
+where $a_i$ are constant matrices and $w_i(\vec{z})$ are the symbol letters, namely rational or algebraic functions of the kinematic variables. 
+The complete set of $\{w_i\}$ is referred to as the alphabet.
+
+### Neural Networks
 <table>
   <tr>
     <td align="center" width="50%">
-      <img src="nn_fig.png" alt="Basic NN" width="90%">
+      <img src="/figures/nn_fig.png" alt="Basic NN" width="100%">
     </td>
     <td align="center" width="50%">
-      <img src="nn_transfer_fig.png" alt="Transfer Learning NN" width="90%">
+      <img src="/figures/nn_transfer_fig.png" alt="Transfer Learning NN" width="100%">
     </td>
   </tr>
   <tr>
@@ -25,24 +40,51 @@ Some of the results are collected at: <https://yf-hang.github.io/CosmoPINNs/>
   </tr>
 </table>
 
-The core idea is to approximate the vector of master integrals (MIs) by a neural network and train it directly against the canonical differential system. The loss combines:
+The key idea is to approximate the vector of MIs by a neural network and train it directly against the canonical differential system. 
+The loss combines:
 
 - Loss of canonical differential equation (CDE) evaluated at collocation points $L_{\mathrm{CDE}}$.
 - Analytic boundary and anchor data $L_{\mathrm{BC}}$.
 
+So the loss function minimized in the training is the weighted sum of the CDE loss and the boundary loss
+$$
+L(\theta) = \lambda_1 L_{\mathrm{CDE}}(\theta) + \lambda_2 L_{\mathrm{BC}}(\theta)
+$$
+with $\lambda_1$ and $\lambda_2$ being the corresponding weights.
+
 The code implements a three-phase hierarchy:
 
 | Phase | Topology | Inputs ($u_k$) dim | Outputs (Re($I_j$)) dim | Training role |
-| --- | --- | ---: | ---: | --- |
-| Phase 0 | chain ($\ell = 0$) | 2 | 4 | source model |
-| Phase 1 | one-loop bubble ($\ell = 1$) | 3 | 10 | transfer target |
-| Phase 2 | two-loop sunset ($\ell = 2$) | 4 | 22 | transfer target |
+| -- | --- | ---: | ---: | --- |
+| P0 | chain ($\ell = 0$) | 2 | 4 | source model |
+| P1 | one-loop bubble ($\ell = 1$) | 3 | 10 | transfer target |
+| P2 | two-loop sunset ($\ell = 2$) | 4 | 22 | transfer target |
 
 in dim vs. out dim: <https://yf-hang.github.io/CosmoPINNs/nn_dim.html>
 
-For transfer learning, the Phase-0 hidden layers are copied into the target model, frozen, and paired with new input and output layers matching the loop-level topology.
+For transfer learning, the P0 hidden layers are copied into the target model, frozen, 
+and paired with new input and output layers matching the loop-level topologies in P1 and P2.
 
-## Scientific Setup
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <img src="/figures/tl_chain_bubble.png" width="100%">
+    </td>
+    <td align="center" width="50%">
+      <img src="/figures/tl_chain_sunset.png" width="100%">
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <em>P1: Transfer from chain to one-loop bubble</em>
+    </td>
+    <td align="center">
+      <em>P2: Transfer from chain to two-loop sunset</em>
+    </td>
+  </tr>
+</table>
+
+## Setup
 
 The default numerical setup follows the manuscript:
 
@@ -61,6 +103,16 @@ The benchmark values of $\varepsilon$ are:
 | 2 | $\varepsilon = \{0, -1, -4, +5\}$ |
 
 Note that $\varepsilon$ is the twist factor defined in the power-law cosmology. Here $\varepsilon = 0$ and $\varepsilon = -1$ are corresponding to the de Sitter (dS) and flat-space backgrounds. The remaining values correspond to the radiation-dominated (RD) and matter-dominated (MD) backgrounds used for the one- and two-loop systems.
+
+
+We use the Adam optimizer with initial learning rate $\eta_0^{}=10^{-3}$. The learning rate is linearly warmed up during the first $N_{\mathrm{warm}}$ epochs and is then decreased by cosine annealing to $\eta_{\min}=10^{-8}$:
+$$
+\eta_t = \begin{cases}
+\eta_0 \dfrac{t}{N_{\mathrm{warm}}}, & 1 \leq t \leqq N_{\mathrm{warm}}
+\\[3mm]
+\eta_{\min} + \dfrac{\eta_0 - \eta_{\min}}{2} \left[1 + \cos\left(\pi \frac{t - N_{\mathrm{warm}}}{N_{\mathrm{epoch}} - N_{\mathrm{warm}}}\right)\right], & N_{\mathrm{warm}} < t \leqq N_{\mathrm{epoch}}
+\end{cases}
+$$
 
 ## Repository Layout
 
