@@ -21,7 +21,7 @@ $$
 A(\vec{z}) = \sum_{i=1}^{6 \cdot 2^{\ell}-1} a_i \mathrm{log}[w_i(\vec{z})] 
 $$
 
-where $a_i$ are constant matrices and $w_i(\vec{z})$ are the symbol letters which are rational or algebraic functions of the kinematic variables. The complete set of $\{w_i\}$ is referred to as the alphabet. Here $\ell$ denotes the number of loop, such as $\ell=0$ chain (tree), $\ell=1$ 1-loop bubble, $\ell=1$ 2-loop sunset, and etc.
+where $a_i$ are constant matrices and $w_i(\vec{z})$ are the symbol letters which are rational or algebraic functions of the kinematic variables. The complete set of $\{w_i\}$ is referred to as the alphabet. Here $\ell$ denotes the number of loop, such as $\ell=0$: chain (tree), $\ell=1$: 1-loop bubble, $\ell=2$: 2-loop sunset, and etc.
 
 ### Neural Networks
 <table>
