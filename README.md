@@ -50,9 +50,11 @@ The loss combines:
 - Analytic boundary and anchor data $L_{\mathrm{BC}}$.
 
 So the loss function minimized in the training is the weighted sum of the CDE loss and the boundary loss
+
 $$
 L(\theta) = \lambda_1 L_{\mathrm{CDE}}(\theta) + \lambda_2 L_{\mathrm{BC}}(\theta)
 $$
+
 with $\lambda_1$ and $\lambda_2$ being the corresponding weights.
 
 The code implements a three-phase hierarchy:
@@ -109,6 +111,7 @@ Note that $\varepsilon$ is the twist factor defined in the power-law cosmology. 
 
 
 We use the Adam optimizer with initial learning rate $\eta_0^{}=10^{-3}$. The learning rate is linearly warmed up during the first $N_{\mathrm{warm}}$ epochs and is then decreased by cosine annealing to $\eta_{\min}=10^{-8}$:
+
 $$
 \eta_t = \begin{cases}
 \eta_0 \dfrac{t}{N_{\mathrm{warm}}}, & 1 \leq t \leqq N_{\mathrm{warm}}
