@@ -7,7 +7,7 @@ Some of the results are collected at: <https://yf-hang.github.io/CosmoPINNs/>
 ## Overview
 
 ### Canonical Differential Equation
-The cosmological master integrals (MIs) $\left\{I_1,I_2,\ldots\right\}=\vec{I}$ satisfy following canonical differential equation (CDE)
+The cosmological master integrals (MIs) $\\{ I_1,I_2,\ldots \\}=\vec{I}$ satisfy following canonical differential equation (CDE)
 
 $$
 \mathrm{d}\vec{I}(\vec{z},\varepsilon) = \varepsilon \left[\mathrm{d}A(\vec{z})\right] \vec{I}(\vec{z}, \varepsilon)
