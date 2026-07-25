@@ -10,17 +10,18 @@ Some of the results are collected at: <https://yf-hang.github.io/CosmoPINNs/>
 The cosmological master integrals (MIs) $\\{ I_1,I_2,\ldots \\}=\vec{I}$ satisfy following canonical differential equation (CDE)
 
 $$
-\mathrm{d}\vec{I}(\vec{z},\varepsilon) = \varepsilon \left[\mathrm{d}A(\vec{z})\right] \vec{I}(\vec{z}, \varepsilon)
+\mathrm{d}\vec{I}(\vec{z},\varepsilon) = \varepsilon [\mathrm{d} A(\vec{z})] \vec{I}(\vec{z}, \varepsilon)
 $$
 
-where $\vec{z}=\{X_1,X_2,\ldots,Y_1,Y_2,\ldots\}$ is the set of all independent kinematic variables 
+where $\vec{z}=\\{X_1,X_2,\ldots,Y_1,Y_2,\ldots\\}$ is the set of all independent kinematic variables 
 $\varepsilon$ denotes the twistor factor, and $\mathrm{d}$ is the total differential $\mathrm{d}=\sum_i\mathrm{d} z_i\partial_{z_i}$.
 Moreover, $A(\vec{z})$ represents the connection matrix which can be further decomposed as
+
 $$
-A(\vec{z}) = \sum_{i} a_i\log[w_i(\vec{z})] 
+A(\vec{z}) = \sum_{i} a_i \mathrm{log}[w_i(\vec{z})] 
 $$
-where $a_i$ are constant matrices and $w_i(\vec{z})$ are the symbol letters, namely rational or algebraic functions of the kinematic variables. 
-The complete set of $\{w_i\}$ is referred to as the alphabet.
+
+where $a_i$ are constant matrices and $w_i(\vec{z})$ are the symbol letters, namely rational or algebraic functions of the kinematic variables. The complete set of $\{w_i\}$ is referred to as the alphabet.
 
 ### Neural Networks
 <table>
