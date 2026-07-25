@@ -8,10 +8,10 @@ Some of the results are collected at: <https://yf-hang.github.io/CosmoPINNs/>
 
 <table>
   <tr>
-    <td align="center" width="60%">
+    <td align="center" width="50%">
       <img src="nn_fig.png" alt="Basic NN" width="90%">
     </td>
-    <td align="center" width="60%">
+    <td align="center" width="50%">
       <img src="nn_transfer_fig.png" alt="Transfer Learning NN" width="90%">
     </td>
   </tr>
