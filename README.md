@@ -115,7 +115,7 @@ We use the Adam optimizer with initial learning rate $\eta_0^{}=10^{-3}$. The le
 $$
 \eta_t = \begin{cases}
 \eta_0 \dfrac{t}{N_{\mathrm{warm}}}, & 1 \leq t \leqq N_{\mathrm{warm}}
-\\[3mm]
+\\
 \eta_{\min} + \dfrac{\eta_0 - \eta_{\min}}{2} \left[1 + \cos\left(\pi \frac{t - N_{\mathrm{warm}}}{N_{\mathrm{epoch}} - N_{\mathrm{warm}}}\right)\right], & N_{\mathrm{warm}} < t \leqq N_{\mathrm{epoch}}
 \end{cases}
 $$
