@@ -159,8 +159,8 @@ Important configuration fields:
 | --- | --- |
 | `device` | `auto`, `cpu`, or `cuda` |
 | `eps_global` | fixed $\varepsilon$ value for the run |
-| `enable_phase2`, `enable_phase3` | select the transfer target; only one can run in a single execution |
-| `run_phase2_only`, `run_phase3_only` | skip Phase-1 training and load an existing Phase-1 checkpoint |
+| `enable_phase1`, `enable_phase2` | select the transfer target; only one can run in a single execution |
+| `run_phase1_only`, `run_phase2_only` | skip Phase-1 training and load an existing Phase-1 checkpoint |
 | `phase*_output_part` | `Re`, `Im`, or `Both`; manuscript runs use real-sector training |
 | `lambda1`, `lambda2` | CDE and boundary loss weights |
 | `phase*_model_load_path` | explicit checkpoint path for transfer or evaluation |
@@ -175,19 +175,19 @@ diagnostic plots, and optional evaluation bundles.
 
 ## Transfer-Only Runs
 
-To train a loop-level target from an existing Phase-1 checkpoint, set:
+To train a loop-level target from an existing Phase-0 checkpoint, set:
 
 ```json
 {
-  "run_phase2_only": true,
-  "enable_phase2": true,
-  "enable_phase3": false,
-  "phase1_model_load_path": "path/to/P1_model_eps_...pt"
+  "run_phase1_only": true,
+  "enable_phase1": true,
+  "enable_phase2": false,
+  "phase0_model_load_path": "path/to/P0_model_eps_...pt"
 }
 ```
 
-or use the analogous `run_phase3_only` / `enable_phase3` settings for Phase 3.
-If `reuse_saved_models` is true and a matching Phase-1 checkpoint exists in the
+or use the analogous `run_phase2_only` / `enable_phase2` settings for Phase 2.
+If `reuse_saved_models` is true and a matching Phase-0 checkpoint exists in the
 standard output location, `main.py` can infer the checkpoint path automatically.
 
 
