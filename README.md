@@ -18,10 +18,10 @@ $\varepsilon$ denotes the twistor factor, and $\mathrm{d}$ is the total differen
 Moreover, $A(\vec{z})$ represents the connection matrix which can be further decomposed as
 
 $$
-A(\vec{z}) = \sum_{i} a_i \mathrm{log}[w_i(\vec{z})] 
+A(\vec{z}) = \sum_{i=1}^{6 \cdot 2^{\ell}-1} a_i \mathrm{log}[w_i(\vec{z})] 
 $$
 
-where $a_i$ are constant matrices and $w_i(\vec{z})$ are the symbol letters, namely rational or algebraic functions of the kinematic variables. The complete set of $\{w_i\}$ is referred to as the alphabet.
+where $a_i$ are constant matrices and $w_i(\vec{z})$ are the symbol letters which are rational or algebraic functions of the kinematic variables. The complete set of $\{w_i\}$ is referred to as the alphabet. Here $\ell$ denotes the number of loop, such as $\ell=0$ chain (tree), $\ell=1$ 1-loop bubble, $\ell=1$ 2-loop sunset, and etc.
 
 ### Neural Networks
 <table>
@@ -189,6 +189,9 @@ If `reuse_saved_models` is true and a matching Phase-1 checkpoint exists in the
 standard output location, `main.py` can infer the checkpoint path automatically.
 
 
-## Notes
+## Agentic Analysis
+On preparation ...
 
+
+## Notes
 The formulation implemented in this codebase originate from [arXiv:2410.17192](https://arxiv.org/abs/2410.17192), where the kinematic flow and CDEs for the relevant two-site loop-level cosmological wavefunction integrals were first analyzed and derived. We ask that papers using, discussing, or extending this formulation cite [arXiv:2410.17192](https://arxiv.org/abs/2410.17192) as the original work.
