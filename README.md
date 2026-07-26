@@ -122,7 +122,7 @@ $$
 $$
 
 After training, the network prediction is compared with the analytic solutions at the evaluation points.
-For each evaluation point $\mathbf{u}_i$, we define
+For each evaluation point $\vec{u}_i$, we define
 
 $$ 
 \mathcal{L}_1 = \frac{\lVert\hat{\vec{I}}(\vec{u}_i,\varepsilon;\theta)-\vec{I}(\vec{u}_i,\varepsilon)\rVert_1}{\max(\lVert \vec{I}(\vec{u}_i,\varepsilon)\rVert_1,\delta)}, \qquad 
@@ -130,6 +130,7 @@ $$
 \mathcal{C} = \frac{|\hat{\vec{I}}(\vec{u}_i,\varepsilon;\theta)\cdot \vec{I}(\vec{u}_i,\varepsilon)|}{\max(\lVert\hat{\vec{I}}(\vec{u}_i,\varepsilon;\theta)\rVert_2\lVert\vec{I}(\vec{u}_i,\varepsilon)\rVert_2,\delta)} 
 $$
 
+Here all norms are evaluated at a single point $\vec{u}_i$ and are taken over the trained output MIs. The regulator $\delta=10^{-30}$ is used only to avoid division by zero when the analytic vector has a vanishing or numerically tiny norm.
 
 ## Repository Layout
 
