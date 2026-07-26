@@ -124,9 +124,11 @@ $$
 After training, the network prediction is compared with the analytic solutions at the evaluation points.
 For each evaluation point $\mathbf{u}_i$, we define
 
-$$ \mathcal{L}_1 = \frac{\left\lVert\hat{\vec{I}}(\vec{u}_i,\varepsilon;\theta)-\vec{I}(\vec{u}_i,\varepsilon) \right\rVert_1}{\max\left(\left\lVert \vec{I}(\vec{u}_i,\varepsilon) \right\rVert_1,\delta\right)}, \quad 
-\mathcal{L}_2 = \frac{\left\lVert \hat{\vec{I}}(\vec{u}_i,\varepsilon;\theta)-\vec{I}(\vec{u}_i,\varepsilon) \right\rVert_2}{\max\left(\left\lVert \vec{I}(\vec{u}_i,\varepsilon) \right\rVert_2,\delta\right)}, \quad 
-\mathcal{C} = \frac{\left|\hat{\vec{I}}(\vec{u}_i,\varepsilon;\theta)\cdot \vec{I}(\vec{u}_i,\varepsilon)\right|}{\max\left(\left\lVert\hat{\vec{I}}(\vec{u}_i,\varepsilon;\theta)\right\rVert_2\left\lVert\vec{I}(\vec{u}_i,\varepsilon)\right\rVert_2,\delta\right)} $$
+$$ 
+\mathcal{L}_1 = \frac{\lVert\hat{\vec{I}}(\vec{u}_i,\varepsilon;\theta)-\vec{I}(\vec{u}_i,\varepsilon)\rVert_1}{\max(\lVert \vec{I}(\vec{u}_i,\varepsilon)\rVert_1,\delta)}, \qquad 
+\mathcal{L}_2 = \frac{\lVert \hat{\vec{I}}(\vec{u}_i,\varepsilon;\theta)-\vec{I}(\vec{u}_i,\varepsilon)\rVert_2}{\max(\lVert \vec{I}(\vec{u}_i,\varepsilon) \rVert_2,\delta)}, \qquad 
+\mathcal{C} = \frac{|\hat{\vec{I}}(\vec{u}_i,\varepsilon;\theta)\cdot \vec{I}(\vec{u}_i,\varepsilon)|}{\max(\lVert\hat{\vec{I}}(\vec{u}_i,\varepsilon;\theta)\rVert_2\lVert\vec{I}(\vec{u}_i,\varepsilon)\rVert_2,\delta)} 
+$$
 
 
 ## Repository Layout
