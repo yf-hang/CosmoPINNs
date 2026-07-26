@@ -191,8 +191,8 @@ If `reuse_saved_models` is true and a matching Phase-0 checkpoint exists in the
 standard output location, `main.py` can infer the checkpoint path automatically.
 
 
-## Agentic Analysis
-On preparation ...
+## Agent
+Developed CosmoAgent, a local, tool-using AI agent for interactive analysis of CosmoPINNs optimization studies. Built with Ollama and Optuna, it can inspect study summaries, compare top-performing trials, retrieve detailed trial information, evaluate parameter importance, and answer follow-up questions through a persistent conversational interface. The current version is read-only: it analyzes existing optimization results without launching new training runs or modifying the Optuna database.
 
 
 ## Notes
