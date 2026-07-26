@@ -93,7 +93,7 @@ and paired with new input and output layers matching the loop-level topologies i
 
 ## Setup
 
-The default numerical setup follows the manuscript:
+Collocation points:
 
 | $\ell$ | Collocation domain | Fixed scale | Collocation points | Boundary points | Epochs |
 | --- | --- | ---: | ---: | ---: | ---: |
@@ -111,7 +111,6 @@ The benchmark values of $\varepsilon$ are:
 
 Note that $\varepsilon$ is the twist factor defined in the power-law cosmology. Here $\varepsilon = 0$ and $\varepsilon = -1$ are corresponding to the de Sitter (dS) and flat-space backgrounds. The remaining values correspond to the radiation-dominated (RD) and matter-dominated (MD) backgrounds used for the one- and two-loop systems.
 
-
 We use the Adam optimizer with initial learning rate $\eta_0^{}=10^{-3}$. The learning rate is linearly warmed up during the first $N_{\mathrm{warm}}$ epochs and is then decreased by cosine annealing to $\eta_{\min}=10^{-8}$:
 
 $$
@@ -121,6 +120,20 @@ $$
 \eta_{\min} + \dfrac{\eta_0 - \eta_{\min}}{2} \left[1 + \cos\left(\pi \frac{t - N_{\mathrm{warm}}}{N_{\mathrm{epoch}} - N_{\mathrm{warm}}}\right)\right], & N_{\mathrm{warm}} < t \leqq N_{\mathrm{epoch}}
 \end{cases}
 $$
+
+After training, the network prediction is compared with the analytic solutions at the evaluation points.
+For each evaluation point $\mathbf{u}_i$, we define
+
+$$
+\begin{aligned}
+\mathcal{L}_1 &= \frac{\left\lVert\hat{\vec{I}}(\vec{u}_i,\varepsilon;\theta)-\vec{I}(\vec{u}_i,\varepsilon) \right\rVert_1}{\max\left(\left\lVert \vec{I}(\vec{u}_i,\varepsilon) \right\rVert_1,\delta\right)} 
+\\
+\mathcal{L}_2 &= \frac{\left\lVert \hat{\vec{I}}(\vec{u}_i,\varepsilon;\theta)-\vec{I}(\vec{u}_i,\varepsilon) \right\rVert_2}{\max\left(\left\lVert \vec{I}(\vec{u}_i,\varepsilon) \right\rVert_2,\delta\right)} 
+\\
+\mathcal{C} &= \frac{\left|\hat{\vec{I}}(\vec{u}_i,\varepsilon;\theta)\cdot \vec{I}(\vec{u}_i,\varepsilon)\right|}{\max\left(\left\lVert\hat{\vec{I}}(\vec{u}_i,\varepsilon;\theta)\right\rVert_2\left\lVert\vec{I}(\vec{u}_i,\varepsilon)\right\rVert_2,\delta\right)}
+\end{aligned}
+$$
+
 
 ## Repository Layout
 
