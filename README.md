@@ -202,7 +202,133 @@ standard output location, `main.py` can infer the checkpoint path automatically.
 
 
 ## Agent
-Developed CosmoAgent, a local, tool-using AI agent for interactive analysis of CosmoPINNs optimization studies. Built with Ollama and Optuna, it can inspect study summaries, compare top-performing trials, retrieve detailed trial information, evaluate parameter importance, and answer follow-up questions through a persistent conversational interface. The current version is read-only: it analyzes existing optimization results without launching new training runs or modifying the Optuna database.
+
+CosmoAgent is a persistent, tool-using conversational interface for inspecting
+Optuna studies and operating CosmoPINNs training runs. It uses a local Ollama
+model for language interaction, while all numerical statements about trials,
+metrics, and parameters are obtained from the configured Optuna SQLite
+database.
+
+Install the Agent dependencies with:
+
+```bash
+python -m pip install -r agent/requirements.txt
+```
+
+The two entry points provide the same functionality:
+
+```bash
+python agent/cosmo_agent.py
+```
+
+CosmoAgent can:
+
+- summarize trial counts, optimization direction, and the current best trial;
+- rank completed trials and compare selected trial numbers;
+- retrieve parameters, validation metrics, timing, and intermediate values;
+- estimate Optuna parameter importance while treating it as association rather
+  than causal evidence;
+- preserve context for follow-up questions;
+- read the current SQLite study on every conversational turn.
+
+The Phase-0 Optuna workflow searches `learning_rate` and `cde_bc_ratio`, with
+`bc_weight=1`. Its independent validation objective is
+
+```text
+median(relative L2) + 0.25 * p90(relative L2)
+```
+
+The language model is not responsible for calculating this score or selecting
+the best trial; Optuna records the objective values and the study direction.
+
+For a direct database check, use:
+
+```text
+You> /study
+```
+
+This bypasses Ollama and prints the SQLite study summary. Simple best-trial
+questions are also answered deterministically from SQLite. The Agent recognizes
+text-style tool requests such as `[DATA]GET_STUDY_SUMMARY[/DATA]`, which can be
+emitted by smaller or older Ollama models, and executes the real tool instead
+of treating the placeholder as a final answer.
+
+### Ollama model selection
+
+The default model is `phi4-mini:latest`. CosmoAgent requires the selected model
+to advertise Ollama `tools` capability; `thinking` capability is optional.
+
+```bash
+# Inspect installed models and compatibility
+python agent/cosmo_agent.py --list-models
+
+# Select a model at startup
+python agent/cosmo_agent.py --model qwen3:1.7b
+
+# Set a different default
+export COSMO_AGENT_MODEL=gpt-oss:20b
+python agent/cosmo_agent.py
+```
+
+Models can also be inspected or switched during a session while preserving the
+conversation:
+
+```text
+You> /models
+You> /model qwen3:1.7b
+You> switch to gpt-oss:20b
+```
+
+Models installed on a local workstation are not automatically available in a
+Colab runtime. Run `ollama list` in the environment where CosmoAgent itself is
+running.
+
+### Training from the best Optuna trial
+
+CosmoAgent can launch an actual CosmoPINNs run when the user explicitly asks to
+start training. For Phase 0 it maps the best completed Optuna trial back to the
+main training configuration:
+
+```text
+learning_rate       -> learning_rate_p0
+cde_bc_ratio        -> lambda1
+bc_weight = 1       -> lambda2 = 1
+```
+
+The final run starts from a newly initialized model and retains the production
+collocation count, epoch count, network architecture, and physical settings
+from `config.json`. Before launch, the Agent verifies that the Optuna study and
+the current Phase-0 configuration agree on the background, output sector,
+domain, and network structure.
+
+Example requests:
+
+```text
+You> preview the Phase-0 training configuration using the best trial
+You> start Phase-0 training using the best Optuna parameters
+You> start Phase-0 and Phase-1 training using the best Phase-0 parameters
+You> what is the status of the latest training job?
+```
+
+Phase 0 is the default pipeline. `phase0_phase1` or `phase0_phase2` is enabled
+only when the user explicitly requests the corresponding transfer stage; the
+current Optuna study tunes only the Phase-0 parameters.
+
+Training runs in the background and does not block the conversation. Each job
+has an isolated directory:
+
+```text
+agent/training_runs/<job_id>/
+|-- config.json       # effective configuration snapshot
+|-- job.json          # status, PID, trial, and parameter mapping
+|-- training.log      # stdout and stderr
+|-- results/          # checkpoints, histories, evaluations, and plots
+```
+
+Only one Agent-launched job is allowed to run at a time to prevent accidental
+GPU contention. Training is started only after an explicit request; questions
+about whether training is possible do not authorize a launch. CosmoAgent never
+modifies existing Optuna trials or the study database.
 
 
 ## Notes
