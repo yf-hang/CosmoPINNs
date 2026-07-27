@@ -1,0 +1,37 @@
+{
+  "study_name": "phase0_tree_level_eps_{eps_tag}_lr_cde_bc_ratio",
+  "storage": null,
+  "output_dir": "agent/phase0_optuna_results/eps_{eps_tag}",
+  "device": "auto",
+
+  "n_trials": 30,
+  "timeout_seconds": null,
+  "sampler_seed": 2026,
+  "train_data_seed": 0,
+  "validation_seed": 2026,
+  "model_seed": 1234,
+
+  "n_coll": 10000,
+  "n_boundary": 1000,
+  "n_bc_edge": 80,
+  "n_corner_each": 80,
+  "n_validation": 2000,
+  "validation_workers": 1,
+  "validation_chunk_size": 2000,
+  "validation_parallel_min_points": 5000,
+
+  "epochs": 2000,
+  "warmup_epochs": 200,
+  "eval_every": 100,
+  "cosine_min_lr": 1e-8,
+
+  "learning_rate_min": 1e-4,
+  "learning_rate_max": 2e-3,
+  "cde_bc_ratio_min": 0.1,
+  "cde_bc_ratio_max": 300.0,
+
+  "pruner_startup_trials": 8,
+  "pruner_warmup_epochs": 600,
+  "show_progress_bar": true,
+  "save_best_checkpoint": true
+}
