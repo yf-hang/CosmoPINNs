@@ -14,7 +14,7 @@ A manuscript presenting this work has been completed and will be made available 
 The cosmological master integrals (MIs) $\\{ I_1,I_2,\ldots \\}=𝑰$ satisfy following canonical differential equation (CDE):
 
 $$
-\mathrm{d}\pmb{I}(\pmb{z},\varepsilon) = \varepsilon [\mathrm{d} A(\pmb{z})] \pmb{I}(\pmb{z}, \varepsilon)
+\mathrm{d}𝑰(𝒛,\varepsilon) = \varepsilon [\mathrm{d} A(𝒛)] 𝑰(𝒛, \varepsilon)
 $$
 
 where $𝒛=\\{X_1,X_2,\ldots,Y_1,Y_2,\ldots\\}$ is the set of all independent kinematic variables 
@@ -22,7 +22,7 @@ $\varepsilon$ denotes the twistor factor, and $\mathrm{d}$ is the total differen
 Moreover, $A(𝒛)$ represents the connection matrix which can be further decomposed as
 
 $$
-A(𝒛) = \sum_{i=1}^{6 \cdot 2^{\ell}-1} a_i \, \mathrm{log}\,\big[w_i(𝒛)\big] 
+A(𝒛) = \sum_{i=1}^{6 \cdot 2^{\ell}-1} a_i \ \mathrm{log}\big[w_i(𝒛)\big] 
 $$
 
 where $a_i$ are constant matrices and $w_i(𝒛)$ are the symbol letters which are rational or algebraic functions of the kinematic variables. The complete set of $\\{w_i\\}$ is referred to as the alphabet. Here $\ell$ denotes the number of loop, such as $\ell=0$: chain (tree), $\ell=1$: 1-loop bubble, $\ell=2$: 2-loop sunset, and etc. For example, when $\ell=0$, connection matrix $A(𝒛)$ takes the following form:
