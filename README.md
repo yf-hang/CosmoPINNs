@@ -1,29 +1,47 @@
 # CosmoPINNs
 
-CosmoPINNs is a physics-informed neural network (PINN) framework for solving the (canonical) differential equations satisfied by cosmological wavefunction coefficients. The project focuses on the two-site (two-vertex) family of cosmological wavefunction integrals in general power-law Friedmann–Robertson-Walker (FRW) backgrounds. It also incorporates transfer learning strategy, using models trained on lower-dimensional baseline systems (tree-level graphs) to initialize and improve the training of higher-dimensional target systems (loop-level graphs). This approach allows the model to reuse previously learned structures, helping reduce training difficulty and improve the efficiency and stability of solving more complex cosmological systems.
+CosmoPINNs is a physics-informed neural network (PINN) framework for solving the canonical differential systems that determine the families of twisted cosmological integrals. The current implementation focuses on integral families associated with two-site (two-vertex) graphs in a conformally-coupled scalar theory with polynomial self-interactions in general power-law Friedmann–Robertson–Walker (FRW) backgrounds. Following the twisted-integral formulation, cosmological wavefunction coefficients are represented in terms of twisted integrals of their flat-space counterparts, and the associated master integrals (MIs) form a finite-dimensional basis satisfying a coupled system of first-order differential equations in kinematic space.
+
+CosmoPINNs further incorporates a transfer-learning strategy for extending solutions from simpler to more complex integral families. Models trained on lower-dimensional baseline systems, such as tree-level graphs, are used to initialize higher-dimensional target systems associated with loop-level graphs. By transferring structures learned from simpler systems, this approach reduces the difficulty of PINN optimization and improves convergence, computational efficiency, and training stability for more complex cosmological integral systems.
 
 Some of the results are collected at: <https://yf-hang.github.io/CosmoPINNs/>
 
-The manuscript has been completed and will be posted on arXiv soon.
+A manuscript presenting this work has been completed and will be made available on arXiv soon.
 
 ## Overview
 
-### Canonical Differential Equation
-The cosmological master integrals (MIs) $\\{ I_1,I_2,\ldots \\}=\vec{I}$ satisfy following canonical differential equation (CDE)
+### Canonical Differential Equation (CDE)
+The cosmological master integrals (MIs) $\\{ I_1,I_2,\ldots \\}=𝑰$ satisfy following canonical differential equation (CDE):
 
 $$
-\mathrm{d}\vec{I}(\vec{z},\varepsilon) = \varepsilon [\mathrm{d} A(\vec{z})] \vec{I}(\vec{z}, \varepsilon)
+\mathrm{d}\pmb{I}(\pmb{z},\varepsilon) = \varepsilon [\mathrm{d} A(\pmb{z})] \pmb{I}(\pmb{z}, \varepsilon)
 $$
 
-where $\vec{z}=\\{X_1,X_2,\ldots,Y_1,Y_2,\ldots\\}$ is the set of all independent kinematic variables 
+where $𝒛=\\{X_1,X_2,\ldots,Y_1,Y_2,\ldots\\}$ is the set of all independent kinematic variables 
 $\varepsilon$ denotes the twistor factor, and $\mathrm{d}$ is the total differential $\mathrm{d}=\sum_i\mathrm{d} z_i\partial_{z_i}$.
-Moreover, $A(\vec{z})$ represents the connection matrix which can be further decomposed as
+Moreover, $A(𝒛)$ represents the connection matrix which can be further decomposed as
 
 $$
-A(\vec{z}) = \sum_{i=1}^{6 \cdot 2^{\ell}-1} a_i \mathrm{log}[w_i(\vec{z})] 
+A(𝒛) = \sum_{i=1}^{6 \cdot 2^{\ell}-1} a_i \, \mathrm{log}\,\big[w_i(𝒛)\big] 
 $$
 
-where $a_i$ are constant matrices and $w_i(\vec{z})$ are the symbol letters which are rational or algebraic functions of the kinematic variables. The complete set of $\{w_i\}$ is referred to as the alphabet. Here $\ell$ denotes the number of loop, such as $\ell=0$: chain (tree), $\ell=1$: 1-loop bubble, $\ell=2$: 2-loop sunset, and etc.
+where $a_i$ are constant matrices and $w_i(𝒛)$ are the symbol letters which are rational or algebraic functions of the kinematic variables. The complete set of $\\{w_i\\}$ is referred to as the alphabet. Here $\ell$ denotes the number of loop, such as $\ell=0$: chain (tree), $\ell=1$: 1-loop bubble, $\ell=2$: 2-loop sunset, and etc. For example, when $\ell=0$, connection matrix $A(𝒛)$ takes the following form:
+
+$$
+A =
+\begin{pmatrix}
+l_1+l_2 & l_3-l_1 & l_4-l_2 & 0 \\
+0 & l_2+l_3 & 0 & l_5-l_2 \\
+0 & 0 & l_1+l_4 & l_5-l_1 \\
+0 & 0 & 0 & 2l_5
+\end{pmatrix}
+$$
+
+where $l_i \equiv \mathrm{log}(w_i)$ and the letters are
+
+$$
+w_1 = X_1+Y_1,\quad\ w_2 = X_2+Y_1, \quad\ w_3 = X_1-Y_1,\quad\ w_4 = X_2-Y_1, \quad\ w_5 = X_1+X_2
+$$
 
 ### Neural Networks
 <table>
@@ -67,7 +85,7 @@ The code implements a three-phase hierarchy:
 | P1 | one-loop bubble ($\ell = 1$) | 3 | 10 | transfer target |
 | P2 | two-loop sunset ($\ell = 2$) | 4 | 22 | transfer target |
 
-in dim vs. out dim: <https://yf-hang.github.io/CosmoPINNs/nn_dim.html>
+$d_{\mathrm{in}}$ vs. $d_{\mathrm{out}}$: <https://yf-hang.github.io/CosmoPINNs/nn_dim.html>
 
 For transfer learning, the P0 hidden layers are copied into the target model, frozen, 
 and paired with new input and output layers matching the loop-level topologies in P1 and P2.
@@ -152,7 +170,7 @@ Here all norms are evaluated at a single point $\vec{u}_i$ and are taken over th
     |-- plot_loss.py                
     |-- plot_error.py
     |-- post_train_check.py
-|-- results/                        # Generated checkpoints, logs, plots, caches
+|-- results/                        # Generated checkpoints, logs, plots
 ```
 
 ## Running Training
