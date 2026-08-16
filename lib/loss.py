@@ -427,7 +427,7 @@ def boundary_loss(
     abs_mse = diff.pow(2).mean()
 
     if not use_normalized:
-        return abs_mse * 2.0
+        return abs_mse
 
     bc_scale = _build_bc_channel_scale(
         bc_target,
@@ -443,4 +443,4 @@ def boundary_loss(
         raise ValueError(f"abs_mse_weight must be in [0,1], got {w_abs}")
 
     mixed = (1.0 - w_abs) * norm_mse + w_abs * abs_mse
-    return mixed * 2.0
+    return mixed
