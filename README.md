@@ -250,15 +250,33 @@ CosmoAgent can:
 - preserve context for follow-up questions;
 - read the current SQLite study on every conversational turn.
 
-The Phase-0 Optuna workflow searches `learning_rate` and `cde_bc_ratio`, with
-`bc_weight=1`. Its independent validation objective is
+The Phase-0 Optuna workflow searches only $\lambda_1$; $\lambda_2$ and
+`learning_rate_p0` remain fixed by the root `config.json`. On the fixed
+validation set, each output component is evaluated independently as
 
-```text
-median(relative L2) + 0.25 * p90(relative L2)
-```
+$$
+E_j = \frac{\lVert \hat I_j-I_j\rVert_2}{\lVert I_j\rVert_2},
+$$
 
-The language model is not responsible for calculating this score or selecting
-the best trial; Optuna records the objective values and the study direction.
+and Optuna minimizes the equal-weight mean
+
+$$
+S = \frac{1}{n_{\mathrm{out}}}\sum_{j=1}^{n_{\mathrm{out}}}E_j,
+\qquad n_{\mathrm{out}}=4 \text{ for Phase 0}.
+$$
+
+The smallest $S$ defines the best trial. A `MedianPruner` receives $S$ through
+`trial.report(S, step=epoch)`. With the default Agent configuration, pruning is
+enabled only after 8 completed trials are available and from epoch 600 onward,
+with checks on the 100-epoch evaluation cadence. For a minimization study, the
+current trial is pruned when its best reported $S$ so far is worse (larger) than
+the median score of completed trials at the same step. A non-finite training
+loss (`NaN` or `Inf`) is pruned immediately. These thresholds are controlled by
+`pruner_startup_trials`, `pruner_warmup_epochs`, and `eval_every`.
+
+The language model is not responsible for calculating the score, pruning a
+trial, or selecting the best trial; those decisions are recorded by Optuna in
+the SQLite study.
 
 For a direct database check, use:
 
@@ -309,9 +327,9 @@ start training. For Phase 0 it maps the best completed Optuna trial back to the
 main training configuration:
 
 ```text
-learning_rate       -> learning_rate_p0
-cde_bc_ratio        -> lambda1
-bc_weight = 1       -> lambda2 = 1
+best trial lambda1  -> lambda1
+learning_rate_p0    -> unchanged from config.json
+lambda2             -> unchanged from config.json
 ```
 
 The final run starts from a newly initialized model and retains the production
