@@ -9,6 +9,10 @@ The repository phase convention is:
 
 This tuner keeps the Phase 0 learning rate fixed from config.json and searches
 only lambda1, while lambda2 remains fixed from config.json.
+
+The Optuna objective gives every Phase 0 output component equal weight:
+for each output j it computes ||pred_j - target_j||_2 / ||target_j||_2 over
+the fixed validation set, then minimizes the arithmetic mean across outputs.
 """
 
 from __future__ import annotations
@@ -224,26 +228,45 @@ def _validation_metrics(
     x_validation: torch.Tensor,
     target_scaled: torch.Tensor,
 ) -> dict[str, float]:
+    """Return equal-weight relative L2 validation metrics for each output."""
     model.eval()
-    with torch.no_grad():
-        prediction = model(x_validation)
-        difference_norm = torch.linalg.vector_norm(prediction - target_scaled, dim=1)
-        target_norm = torch.linalg.vector_norm(target_scaled, dim=1)
-        denominator_floor = max(float(torch.median(target_norm).item()) * 1e-6, 1e-12)
-        relative_l2 = difference_norm / target_norm.clamp_min(denominator_floor)
-        median = float(torch.quantile(relative_l2, 0.50).item())
-        p90 = float(torch.quantile(relative_l2, 0.90).item())
-        mean = float(relative_l2.mean().item())
-        # Median measures the typical point; p90 prevents a good median from
-        # hiding a broad error tail.
-        score = median + 0.25 * p90
-    model.train()
-    return {
-        "score": score,
-        "relative_l2_median": median,
-        "relative_l2_p90": p90,
-        "relative_l2_mean": mean,
-    }
+    try:
+        with torch.no_grad():
+            prediction = model(x_validation)
+            if prediction.shape != target_scaled.shape:
+                raise ValueError(
+                    "Validation prediction/target shape mismatch: "
+                    f"{tuple(prediction.shape)} vs {tuple(target_scaled.shape)}"
+                )
+
+            # dim=0 means that each output component is evaluated over all
+            # validation points independently:
+            #   E_j = ||prediction_j - target_j||_2 / ||target_j||_2.
+            difference_norm = torch.linalg.vector_norm(prediction - target_scaled, dim=0)
+            target_norm = torch.linalg.vector_norm(target_scaled, dim=0)
+
+            if not bool(torch.isfinite(difference_norm).all().item()):
+                raise ValueError("Non-finite validation prediction error norm.")
+            if not bool(torch.isfinite(target_norm).all().item()):
+                raise ValueError("Non-finite validation target norm.")
+            if bool((target_norm <= 0).any().item()):
+                raise ValueError(
+                    "At least one validation output has zero L2 target norm; "
+                    "per-output relative L2 is undefined."
+                )
+
+            relative_l2_outputs = difference_norm / target_norm
+            score = float(relative_l2_outputs.mean().item())
+
+            metrics: dict[str, float] = {
+                "score": score,
+                "relative_l2_mean_outputs": score,
+            }
+            for index, value in enumerate(relative_l2_outputs):
+                metrics[f"relative_l2_output_{index}"] = float(value.item())
+            return metrics
+    finally:
+        model.train()
 
 
 class Phase0Objective:
@@ -397,15 +420,23 @@ class Phase0Objective:
 
 
 def _write_trials_csv(study: Any, path: Path) -> None:
+    output_metric_names = sorted(
+        {
+            name
+            for trial in study.trials
+            for name in trial.user_attrs
+            if name.startswith("relative_l2_output_")
+        },
+        key=lambda name: int(name.rsplit("_", 1)[1]),
+    )
     fieldnames = [
         "number",
         "state",
         "value",
         "lambda1",
         "lambda2",
-        "relative_l2_median",
-        "relative_l2_p90",
-        "relative_l2_mean",
+        "relative_l2_mean_outputs",
+        *output_metric_names,
         "train_cde_loss",
         "train_bc_loss",
         "elapsed_seconds",
@@ -414,21 +445,20 @@ def _write_trials_csv(study: Any, path: Path) -> None:
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
         writer.writeheader()
         for trial in study.trials:
-            writer.writerow(
-                {
-                    "number": trial.number,
-                    "state": trial.state.name,
-                    "value": trial.value,
-                    "lambda1": trial.params.get("lambda1"),
-                    "lambda2": trial.user_attrs.get("lambda2"),
-                    "relative_l2_median": trial.user_attrs.get("relative_l2_median"),
-                    "relative_l2_p90": trial.user_attrs.get("relative_l2_p90"),
-                    "relative_l2_mean": trial.user_attrs.get("relative_l2_mean"),
-                    "train_cde_loss": trial.user_attrs.get("train_cde_loss"),
-                    "train_bc_loss": trial.user_attrs.get("train_bc_loss"),
-                    "elapsed_seconds": trial.user_attrs.get("elapsed_seconds"),
-                }
-            )
+            row = {
+                "number": trial.number,
+                "state": trial.state.name,
+                "value": trial.value,
+                "lambda1": trial.params.get("lambda1"),
+                "lambda2": trial.user_attrs.get("lambda2"),
+                "relative_l2_mean_outputs": trial.user_attrs.get("relative_l2_mean_outputs"),
+                "train_cde_loss": trial.user_attrs.get("train_cde_loss"),
+                "train_bc_loss": trial.user_attrs.get("train_bc_loss"),
+                "elapsed_seconds": trial.user_attrs.get("elapsed_seconds"),
+            }
+            for name in output_metric_names:
+                row[name] = trial.user_attrs.get(name)
+            writer.writerow(row)
 
 
 def _parse_args() -> argparse.Namespace:
@@ -546,6 +576,7 @@ def main() -> None:
         "train_data_seed": int(tune["train_data_seed"]),
         "validation_seed": int(tune["validation_seed"]),
         "model_seed": int(tune["model_seed"]),
+        "objective_metric": "mean_per_output_relative_l2",
     }
     previous_signature = study.user_attrs.get("phase0_signature")
     if previous_signature is not None and previous_signature != signature:
@@ -585,7 +616,7 @@ def main() -> None:
         "study_name": study.study_name,
         "storage": storage,
         "best_trial": int(best.number),
-        "objective": "median(relative_L2) + 0.25 * p90(relative_L2)",
+        "objective": "mean_j(||prediction_j-target_j||_2 / ||target_j||_2)",
         "best_value": float(best.value),
         "best_params": {
             "lambda1": float(best.params["lambda1"]),
