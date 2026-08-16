@@ -1,5 +1,5 @@
 {
-  "study_name": "phase0_tree_level_eps_{eps_tag}_lr_cde_bc_ratio",
+  "study_name": "phase0_tree_level_eps_{eps_tag}_lambda1",
   "storage": null,
   "output_dir": "agent/phase0_optuna_results/eps_{eps_tag}",
   "device": "auto",
@@ -25,10 +25,8 @@
   "eval_every": 100,
   "cosine_min_lr": 1e-8,
 
-  "learning_rate_min": 1e-4,
-  "learning_rate_max": 2e-3,
-  "cde_bc_ratio_min": 0.1,
-  "cde_bc_ratio_max": 300.0,
+  "lambda1_min": 0.1,
+  "lambda1_max": 300.0,
 
   "pruner_startup_trials": 8,
   "pruner_warmup_epochs": 600,
