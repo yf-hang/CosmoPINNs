@@ -219,31 +219,24 @@ or use the analogous `run_phase2_only` / `enable_phase2` settings for Phase 2.
 If `reuse_saved_models` is true and a matching Phase-0 checkpoint exists in the
 standard output location, `main.py` can infer the checkpoint path automatically.
 
+## Phase-0 Hyperparameter Tuning (Optuna)
 
-## Agent
-
-The `agent/` tools cover two related tasks: Phase-0 hyperparameter tuning with
-Optuna and conversational inspection or execution of the resulting study.
-Install their dependencies with:
+The Phase-0 tuner is implemented in `agent/phase0_optuna.py`. Install the Agent
+requirements and launch the study with:
 
 ```bash
 python -m pip install -r agent/requirements.txt
-```
-
-### Phase-0 Optuna tuning
-
-Run the Phase-0 tuner with:
-
-```bash
 python agent/phase0_optuna.py
 ```
 
-The tuner searches only $\lambda_1$. The Phase-0 learning rate
+### Search setup
+
+Optuna searches only $\lambda_1$. The Phase-0 learning rate
 `learning_rate_p0` and $\lambda_2$ remain fixed by the root `config.json`.
 The search range, trial count, validation sampling, and pruning settings are
 configured in `agent/phase0_optuna_config.json`.
 
-#### Validation objective
+### Validation objective
 
 For each Phase-0 output component, the fixed validation set is used to compute
 
@@ -259,10 +252,10 @@ S = \frac{1}{n_{\mathrm{out}}}\sum_{j=1}^{n_{\mathrm{out}}}E_j,
 $$
 
 The completed trial with the smallest $S$ is the best trial. The individual
-$E_j$ values are also recorded so that poor performance in one output component
-is not hidden by the average.
+$E_j$ values are also recorded so that the contribution of each output can be
+inspected separately.
 
-#### Pruning
+### Pruning
 
 The tuner uses Optuna's `MedianPruner`. At each validation step it reports $S$
 with `trial.report(S, step=epoch)`. With the default configuration, median
@@ -275,6 +268,8 @@ or `Inf`) is pruned immediately.
 The relevant controls are `pruner_startup_trials`, `pruner_warmup_epochs`, and
 `eval_every` in `agent/phase0_optuna_config.json`.
 
+### Optuna outputs
+
 The study is stored in SQLite under the epsilon-specific Optuna output directory.
 The main result files are:
 
@@ -285,12 +280,12 @@ best_phase0_checkpoint.pt    # checkpoint for the best score seen so far
 study.sqlite3                # persistent Optuna study
 ```
 
-### CosmoAgent
+## CosmoAgent
 
 `agent/cosmo_agent.py` is a persistent, tool-using conversational interface for
 inspecting the Optuna study and operating CosmoPINNs training runs. It uses a
 local Ollama model for language interaction, while numerical statements about
-trials, metrics, and parameters come from SQLite.
+trials, metrics, and parameters come from the Optuna SQLite database.
 
 ```bash
 python agent/cosmo_agent.py
@@ -298,14 +293,17 @@ python agent/cosmo_agent.py
 
 CosmoAgent resolves the Phase-0 study automatically from the current root
 `config.json` and `agent/phase0_optuna_config.json`, including the epsilon tag,
-study name, and SQLite output path. It can:
+study name, and SQLite output path.
+
+### Study inspection
+
+CosmoAgent can:
 
 - summarize trial states and the current best trial;
 - rank or compare completed trials;
 - retrieve `lambda1`, objective values, per-output relative $L_2$ metrics,
   timing, and intermediate values;
 - estimate Optuna parameter importance as association rather than causality;
-- preview or launch a production CosmoPINNs run using the best `lambda1`;
 - preserve context for follow-up questions.
 
 For a direct database check that bypasses the language model, use:
@@ -388,7 +386,6 @@ agent/training_runs/<job_id>/
 Only one Agent-launched job is allowed to run at a time to avoid accidental GPU
 contention. CosmoAgent never modifies existing Optuna trials or the study
 database.
-
 
 ## Notes
 The formulation implemented in this codebase originate from [arXiv:2410.17192](https://arxiv.org/abs/2410.17192), where the kinematic flow and CDEs for the relevant two-site loop-level cosmological wavefunction integrals were first analyzed and derived. We ask that papers using, discussing, or extending this formulation cite [arXiv:2410.17192](https://arxiv.org/abs/2410.17192) as the original work.
