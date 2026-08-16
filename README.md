@@ -222,73 +222,100 @@ standard output location, `main.py` can infer the checkpoint path automatically.
 
 ## Agent
 
-CosmoAgent is a persistent, tool-using conversational interface for inspecting
-Optuna studies and operating CosmoPINNs training runs. It uses a local Ollama
-model for language interaction, while all numerical statements about trials,
-metrics, and parameters are obtained from the configured Optuna SQLite
-database.
-
-Install the Agent dependencies with:
+The `agent/` tools cover two related tasks: Phase-0 hyperparameter tuning with
+Optuna and conversational inspection or execution of the resulting study.
+Install their dependencies with:
 
 ```bash
 python -m pip install -r agent/requirements.txt
 ```
 
-The two entry points provide the same functionality:
+### Phase-0 Optuna tuning
+
+Run the Phase-0 tuner with:
 
 ```bash
-python agent/cosmo_agent.py
+python agent/phase0_optuna.py
 ```
 
-CosmoAgent can:
+The tuner searches only $\lambda_1$. The Phase-0 learning rate
+`learning_rate_p0` and $\lambda_2$ remain fixed by the root `config.json`.
+The search range, trial count, validation sampling, and pruning settings are
+configured in `agent/phase0_optuna_config.json`.
 
-- summarize trial counts, optimization direction, and the current best trial;
-- rank completed trials and compare selected trial numbers;
-- retrieve parameters, validation metrics, timing, and intermediate values;
-- estimate Optuna parameter importance while treating it as association rather
-  than causal evidence;
-- preserve context for follow-up questions;
-- read the current SQLite study on every conversational turn.
+#### Validation objective
 
-The Phase-0 Optuna workflow searches only $\lambda_1$; $\lambda_2$ and
-`learning_rate_p0` remain fixed by the root `config.json`. On the fixed
-validation set, each output component is evaluated independently as
+For each Phase-0 output component, the fixed validation set is used to compute
 
 $$
-E_j = \frac{\lVert \hat I_j-I_j\rVert_2}{\lVert I_j\rVert_2},
+E_j = \frac{\lVert \hat I_j-I_j\rVert_2}{\lVert I_j\rVert_2}.
 $$
 
-and Optuna minimizes the equal-weight mean
+Optuna minimizes the equal-weight mean
 
 $$
 S = \frac{1}{n_{\mathrm{out}}}\sum_{j=1}^{n_{\mathrm{out}}}E_j,
 \qquad n_{\mathrm{out}}=4 \text{ for Phase 0}.
 $$
 
-The smallest $S$ defines the best trial. A `MedianPruner` receives $S$ through
-`trial.report(S, step=epoch)`. With the default Agent configuration, pruning is
-enabled only after 8 completed trials are available and from epoch 600 onward,
-with checks on the 100-epoch evaluation cadence. For a minimization study, the
-current trial is pruned when its best reported $S$ so far is worse (larger) than
-the median score of completed trials at the same step. A non-finite training
-loss (`NaN` or `Inf`) is pruned immediately. These thresholds are controlled by
-`pruner_startup_trials`, `pruner_warmup_epochs`, and `eval_every`.
+The completed trial with the smallest $S$ is the best trial. The individual
+$E_j$ values are also recorded so that poor performance in one output component
+is not hidden by the average.
 
-The language model is not responsible for calculating the score, pruning a
-trial, or selecting the best trial; those decisions are recorded by Optuna in
-the SQLite study.
+#### Pruning
 
-For a direct database check, use:
+The tuner uses Optuna's `MedianPruner`. At each validation step it reports $S$
+with `trial.report(S, step=epoch)`. With the default configuration, median
+pruning starts only after 8 completed trials exist and from epoch 600 onward,
+with validation/pruning checks every 100 epochs. For this minimization study, a
+trial is pruned when its best reported $S$ so far is larger than the median
+score of completed trials at the same step. A non-finite training loss (`NaN`
+or `Inf`) is pruned immediately.
+
+The relevant controls are `pruner_startup_trials`, `pruner_warmup_epochs`, and
+`eval_every` in `agent/phase0_optuna_config.json`.
+
+The study is stored in SQLite under the epsilon-specific Optuna output directory.
+The main result files are:
+
+```text
+best_params.json             # best trial, lambda1, objective, and metrics
+trials.csv                   # all trials and per-output validation errors
+best_phase0_checkpoint.pt    # checkpoint for the best score seen so far
+study.sqlite3                # persistent Optuna study
+```
+
+### CosmoAgent
+
+`agent/cosmo_agent.py` is a persistent, tool-using conversational interface for
+inspecting the Optuna study and operating CosmoPINNs training runs. It uses a
+local Ollama model for language interaction, while numerical statements about
+trials, metrics, and parameters come from SQLite.
+
+```bash
+python agent/cosmo_agent.py
+```
+
+CosmoAgent resolves the Phase-0 study automatically from the current root
+`config.json` and `agent/phase0_optuna_config.json`, including the epsilon tag,
+study name, and SQLite output path. It can:
+
+- summarize trial states and the current best trial;
+- rank or compare completed trials;
+- retrieve `lambda1`, objective values, per-output relative $L_2$ metrics,
+  timing, and intermediate values;
+- estimate Optuna parameter importance as association rather than causality;
+- preview or launch a production CosmoPINNs run using the best `lambda1`;
+- preserve context for follow-up questions.
+
+For a direct database check that bypasses the language model, use:
 
 ```text
 You> /study
 ```
 
-This bypasses Ollama and prints the SQLite study summary. Simple best-trial
-questions are also answered deterministically from SQLite. The Agent recognizes
-text-style tool requests such as `[DATA]GET_STUDY_SUMMARY[/DATA]`, which can be
-emitted by smaller or older Ollama models, and executes the real tool instead
-of treating the placeholder as a final answer.
+The language model does not calculate the objective, prune trials, or select the
+best trial; those decisions are made and stored by Optuna.
 
 ### Ollama model selection
 
@@ -322,9 +349,8 @@ running.
 
 ### Training from the best Optuna trial
 
-CosmoAgent can launch an actual CosmoPINNs run when the user explicitly asks to
-start training. For Phase 0 it maps the best completed Optuna trial back to the
-main training configuration:
+When explicitly asked to start training, CosmoAgent maps the best Phase-0 trial
+back to the production configuration as follows:
 
 ```text
 best trial lambda1  -> lambda1
@@ -334,25 +360,22 @@ lambda2             -> unchanged from config.json
 
 The final run starts from a newly initialized model and retains the production
 collocation count, epoch count, network architecture, and physical settings
-from `config.json`. Before launch, the Agent verifies that the Optuna study and
-the current Phase-0 configuration agree on the background, output sector,
-domain, and network structure.
+from `config.json`. Before launch, CosmoAgent verifies compatibility between the
+study and the current Phase-0 setup, including the background, output sector,
+domain, network structure, fixed learning rate, fixed `lambda2`, and objective
+definition.
 
 Example requests:
 
 ```text
 You> preview the Phase-0 training configuration using the best trial
-You> start Phase-0 training using the best Optuna parameters
-You> start Phase-0 and Phase-1 training using the best Phase-0 parameters
+You> start Phase-0 training using the best Optuna lambda1
+You> start Phase-0 and Phase-1 training using the best Phase-0 lambda1
 You> what is the status of the latest training job?
 ```
 
 Phase 0 is the default pipeline. `phase0_phase1` or `phase0_phase2` is enabled
-only when the user explicitly requests the corresponding transfer stage; the
-current Optuna study tunes only the Phase-0 parameters.
-
-Training runs in the background and does not block the conversation. Each job
-has an isolated directory:
+only when explicitly requested. Agent-launched jobs are isolated under:
 
 ```text
 agent/training_runs/<job_id>/
@@ -362,10 +385,9 @@ agent/training_runs/<job_id>/
 |-- results/          # checkpoints, histories, evaluations, and plots
 ```
 
-Only one Agent-launched job is allowed to run at a time to prevent accidental
-GPU contention. Training is started only after an explicit request; questions
-about whether training is possible do not authorize a launch. CosmoAgent never
-modifies existing Optuna trials or the study database.
+Only one Agent-launched job is allowed to run at a time to avoid accidental GPU
+contention. CosmoAgent never modifies existing Optuna trials or the study
+database.
 
 
 ## Notes
