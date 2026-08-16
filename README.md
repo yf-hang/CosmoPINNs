@@ -11,7 +11,7 @@ A manuscript presenting this work has been completed and will be made available 
 ## Overview
 
 ### Canonical Differential Equation (CDE)
-The cosmological master integrals (MIs) $\\{ I_1,I_2,\ldots \\}=𝑰$ satisfy following canonical differential equation (CDE):
+The cosmological master integrals (MIs) $\\{I_1,I_2,\ldots \\}=𝑰$ satisfy following canonical differential equation (CDE):
 
 $$
 \mathrm{d}𝑰(𝒛,\varepsilon) = \varepsilon [\mathrm{d} A(𝒛)] 𝑰(𝒛, \varepsilon)
@@ -157,21 +157,26 @@ Here all norms are evaluated at a single point $\vec{u}_i$ and are taken over th
 |-- main.py                         # Main configuration-driven training entry point
 |-- config.json                     # Default run configuration
 |-- lib/
-|   |-- pinn_models.py              # PINN and transfer-PINN modules
-|   |-- loss.py                     # CDE residual and BC losses
-|   |-- train.py                    # Optimizer, warmup, cosine schedule
-|-- two_site_chain/                 # Phase-0 analytic targets and CDE matrices
-    |-- coll_bc_1loop.py            # Collocation and boundary data
-    |-- coll_mat_1loop.py           # Generation of connection matrix
-    |-- mat_data_1loop.py           # Structure of connection matrix
-    |-- sol_1loop.py                # Analytic solutions
-|-- tl_two_site_bubble/             # Phase-1 one-loop transfer target
-|-- tl_two_site_sunset/             # Phase-2 two-loop transfer target
+|   |-- pinn_models.py              # PINN and transfer-PINN models
+|   |-- loss.py                     # CDE and BC losses
+|   |-- train.py                    # Optimizer, warmup, learning rate schedule
+|-- two_site_chain/                 # Phase-0 (two-site chain) analytic information
+|   |-- coll_bc.py                  # Collocation and boundary data
+|   |-- conn_mat.py                 # Connection-matrix construction
+|   |-- mat_data.py                 # Constant connection matrices
+|   |-- sol_chain.py                # Analytic solutions
+|-- tl_two_site_bubble/             # Phase-1 (one-loop bubble) analytic information
+|-- tl_two_site_sunset/             # Phase-2 (two-loop sunset) analytic information
 |-- plot_tools/                     # Per-run plotting and post-training checks
-    |-- plot_loss.py                
-    |-- plot_error.py
-    |-- post_train_check.py
+|   |-- plot_losses.py
+|   |-- plot_error.py
+|   |-- post_train_check.py
 |-- results/                        # Generated checkpoints, logs, plots
+|-- agent/                          # Hyperparameter finetuning and mini agent
+|   |-- cosmo_agent.py              # Conversational interface for studies and runs
+|   |-- phase0_optuna.py            # Phase-0 Optuna objective and study launcher
+|   |-- phase0_optuna_config.json   # Optuna search and pruning configuration
+|   |-- requirements.txt            # Agent and Optuna dependencies
 ```
 
 ## Running Training
@@ -219,9 +224,15 @@ or use the analogous `run_phase2_only` / `enable_phase2` settings for Phase 2.
 If `reuse_saved_models` is true and a matching Phase-0 checkpoint exists in the
 standard output location, `main.py` can infer the checkpoint path automatically.
 
-## Phase-0 Hyperparameter Tuning (Optuna)
+## Hyperparameter Tuning (Ongoing)
 
-The Phase-0 tuner is implemented in `agent/phase0_optuna.py`. Install the Agent
+We use Optuna to tune selected training hyperparameters in a controlled,
+phase-specific workflow. The current implementation focuses on Phase 0 and
+optimizes the CDE loss weight $\lambda_1$ against a fixed validation set, while
+all other training and physical settings, including $\lambda_2$, remain fixed.
+Extending the tuning workflow to the loop-level phases is ongoing.
+
+The Phase-0 tuner is implemented in `agent/phase0_optuna.py`. Install the
 requirements and launch the study with:
 
 ```bash
@@ -248,7 +259,7 @@ Optuna minimizes the equal-weight mean
 
 $$
 S = \frac{1}{n_{\mathrm{out}}}\sum_{j=1}^{n_{\mathrm{out}}}E_j,
-\qquad n_{\mathrm{out}}=4 \text{ for Phase 0}.
+\qquad n_{\mathrm{out}}=4 \quad \text{for Phase 0}.
 $$
 
 The completed trial with the smallest $S$ is the best trial. The individual
@@ -280,7 +291,7 @@ best_phase0_checkpoint.pt    # checkpoint for the best score seen so far
 study.sqlite3                # persistent Optuna study
 ```
 
-## CosmoAgent
+## Mini Agent (Ongoing)
 
 `agent/cosmo_agent.py` is a persistent, tool-using conversational interface for
 inspecting the Optuna study and operating CosmoPINNs training runs. It uses a
