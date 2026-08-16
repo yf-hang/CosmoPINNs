@@ -100,13 +100,21 @@ def train_model_fixed_eps(
             gn = _grad_norm_l2(model)
             gn_post_text = ""
 
-        optimizer.step()
-
+        # Apply the warm-up learning rate before the parameter update so that
+        # the first optimizer step starts at lr_init / warmup_len instead of
+        # using the full initial learning rate.
         if step <= warmup_len:
             scale = step / float(warmup_len)
             for pg in optimizer.param_groups:
                 pg["lr"] = lr_init * scale
-        else:
+
+        # Record the learning rate actually used for this parameter update.
+        lr_used = optimizer.param_groups[0]["lr"]
+        optimizer.step()
+
+        # After warm-up, decay the learning rate for subsequent updates using
+        # cosine annealing down to cosine_min_lr.
+        if step > warmup_len:
             cosine_scheduler.step()
 
         loss_tot_hist.append(loss_total.item())
@@ -114,7 +122,7 @@ def train_model_fixed_eps(
         loss_bc_hist.append(loss_bc.item())
 
         if step % print_every == 0 or step == 1 or step == total_epochs:
-            lr = optimizer.param_groups[0]["lr"]
+            lr = lr_used
             tot_val = float(loss_total.item())
             cde_val = float(loss_cde.item())
             bc_val = float(loss_bc.item())
