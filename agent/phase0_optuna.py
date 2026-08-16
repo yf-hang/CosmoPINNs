@@ -6,6 +6,9 @@ The repository phase convention is:
     Phase 0 = tree level
     Phase 1 = transfer to 1 loop
     Phase 2 = transfer to 2 loops
+
+This tuner keeps the Phase 0 learning rate fixed from config.json and searches
+only lambda1, while lambda2 remains fixed from config.json.
 """
 
 from __future__ import annotations
@@ -264,6 +267,8 @@ class Phase0Objective:
         self.output_part = _normalise_output_part(base.get("phase0_output_part", "re"))
         self.matrix_module = _build_matrix_module(device, float(base["cy"]))
         self.incumbent_score = incumbent_score
+        self.learning_rate = float(base["learning_rate_p0"])
+        self.lambda2 = float(base.get("lambda2", 1.0))
 
     def _boundary_loss(self, model: torch.nn.Module) -> torch.Tensor:
         use_normalized = _as_bool(
@@ -282,25 +287,19 @@ class Phase0Objective:
         )
 
     def __call__(self, trial: Any) -> float:
-        learning_rate = trial.suggest_float(
-            "learning_rate",
-            float(self.tune["learning_rate_min"]),
-            float(self.tune["learning_rate_max"]),
-            log=True,
-        )
-        cde_bc_ratio = trial.suggest_float(
-            "cde_bc_ratio",
-            float(self.tune["cde_bc_ratio_min"]),
-            float(self.tune["cde_bc_ratio_max"]),
+        lambda1 = trial.suggest_float(
+            "lambda1",
+            float(self.tune["lambda1_min"]),
+            float(self.tune["lambda1_max"]),
             log=True,
         )
 
         # Keeping the same initialisation for every trial makes comparisons
-        # reflect hyperparameters rather than a lucky random seed.
+        # reflect lambda1 rather than a lucky random seed.
         _seed_everything(int(self.tune["model_seed"]))
         config = SimpleNamespace(**self.base)
         model = PinnModel(config, in_dim=2, output_part=self.output_part).to(self.device)
-        optimizer = Adam(model.parameters(), lr=learning_rate)
+        optimizer = Adam(model.parameters(), lr=self.learning_rate)
 
         epochs = int(self.tune["epochs"])
         warmup_epochs = min(int(self.tune["warmup_epochs"]), epochs)
@@ -315,6 +314,13 @@ class Phase0Objective:
 
         try:
             for epoch in range(1, epochs + 1):
+                # Set the warmup learning rate BEFORE this epoch's optimizer
+                # step. This avoids epoch 1 accidentally using the full LR.
+                if warmup_epochs > 0 and epoch <= warmup_epochs:
+                    warmup_scale = epoch / float(warmup_epochs)
+                    for parameter_group in optimizer.param_groups:
+                        parameter_group["lr"] = self.learning_rate * warmup_scale
+
                 optimizer.zero_grad(set_to_none=True)
                 cde_loss, _ = cde_residual_loss_fixed_eps(
                     model,
@@ -325,20 +331,15 @@ class Phase0Objective:
                     output_part=self.output_part,
                 )
                 bc_loss_value = self._boundary_loss(model)
-                total_loss = cde_bc_ratio * cde_loss + bc_loss_value
+                total_loss = lambda1 * cde_loss + self.lambda2 * bc_loss_value
                 if not bool(torch.isfinite(total_loss).item()):
                     raise self.optuna.TrialPruned("Non-finite training loss.")
 
                 total_loss.backward()
                 optimizer.step()
 
-                # Match the legacy lib/train.py warmup/cosine update order so
-                # selected parameters transfer directly to the main trainer.
-                if epoch <= warmup_epochs and warmup_epochs > 0:
-                    scale = epoch / float(warmup_epochs)
-                    for parameter_group in optimizer.param_groups:
-                        parameter_group["lr"] = learning_rate * scale
-                else:
+                # Start cosine decay only after the warmup phase is complete.
+                if epoch > warmup_epochs:
                     scheduler.step()
 
                 if epoch == 1 or epoch % eval_every == 0 or epoch == epochs:
@@ -361,8 +362,9 @@ class Phase0Objective:
             for name, value in last_losses.items():
                 trial.set_user_attr(name, value)
             trial.set_user_attr("elapsed_seconds", elapsed)
-            trial.set_user_attr("bc_weight", 1.0)
-            trial.set_user_attr("cde_weight", cde_bc_ratio)
+            trial.set_user_attr("lambda2", self.lambda2)
+            trial.set_user_attr("bc_weight", self.lambda2)
+            trial.set_user_attr("cde_weight", lambda1)
             trial.set_user_attr("solution_scale", self.data.solution_scale)
 
             score = float(last_losses["score"])
@@ -378,9 +380,11 @@ class Phase0Objective:
                     "n_basis": int(self.base["n_basis"]),
                     "output_part": self.output_part,
                     "pred_scale": self.data.solution_scale,
-                    "learning_rate": learning_rate,
-                    "cde_weight": cde_bc_ratio,
-                    "bc_weight": 1.0,
+                    "learning_rate": self.learning_rate,
+                    "lambda1": lambda1,
+                    "lambda2": self.lambda2,
+                    "cde_weight": lambda1,
+                    "bc_weight": self.lambda2,
                     "validation_metrics": last_losses,
                     "trial_number": int(trial.number),
                 }
@@ -397,8 +401,8 @@ def _write_trials_csv(study: Any, path: Path) -> None:
         "number",
         "state",
         "value",
-        "learning_rate",
-        "cde_bc_ratio",
+        "lambda1",
+        "lambda2",
         "relative_l2_median",
         "relative_l2_p90",
         "relative_l2_mean",
@@ -415,8 +419,8 @@ def _write_trials_csv(study: Any, path: Path) -> None:
                     "number": trial.number,
                     "state": trial.state.name,
                     "value": trial.value,
-                    "learning_rate": trial.params.get("learning_rate"),
-                    "cde_bc_ratio": trial.params.get("cde_bc_ratio"),
+                    "lambda1": trial.params.get("lambda1"),
+                    "lambda2": trial.user_attrs.get("lambda2"),
                     "relative_l2_median": trial.user_attrs.get("relative_l2_median"),
                     "relative_l2_p90": trial.user_attrs.get("relative_l2_p90"),
                     "relative_l2_mean": trial.user_attrs.get("relative_l2_mean"),
@@ -532,6 +536,8 @@ def main() -> None:
         ],
         "hidden_size": int(base["hidden_size"]),
         "n_hidden_layers": int(base["n_hidden_layers"]),
+        "learning_rate_p0": float(base["learning_rate_p0"]),
+        "lambda2": float(base.get("lambda2", 1.0)),
         "n_coll": int(tune["n_coll"]),
         "n_boundary": int(tune["n_boundary"]),
         "n_validation": int(tune["n_validation"]),
@@ -582,10 +588,8 @@ def main() -> None:
         "objective": "median(relative_L2) + 0.25 * p90(relative_L2)",
         "best_value": float(best.value),
         "best_params": {
-            "learning_rate": float(best.params["learning_rate"]),
-            "cde_weight": float(best.params["cde_bc_ratio"]),
-            "bc_weight": 1.0,
-            "cde_bc_ratio": float(best.params["cde_bc_ratio"]),
+            "lambda1": float(best.params["lambda1"]),
+            "lambda2": float(base.get("lambda2", 1.0)),
         },
         "best_metrics": dict(best.user_attrs),
         "solution_scale": data.solution_scale,
@@ -596,7 +600,7 @@ def main() -> None:
     _write_json(output_dir / "best_params.json", summary)
     _write_trials_csv(study, output_dir / "trials.csv")
 
-    print("\nBest Phase 0 parameters")
+    print("\nBest Phase 0 lambda parameters")
     print(json.dumps(summary["best_params"], indent=2))
     print(f"Validation objective: {best.value:.6e}")
     print(f"Results: {output_dir}")
