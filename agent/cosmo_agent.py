@@ -22,8 +22,18 @@ from optuna.trial import FrozenTrial, TrialState
 # 1. Configuration
 # ============================================================
 
-# Default local Ollama model. Override it at startup with --model or with the
-# COSMO_AGENT_MODEL environment variable, then switch interactively if needed.
+SCRIPT_DIR = Path(__file__).resolve().parent
+REPO_ROOT = SCRIPT_DIR.parent
+BASE_CONFIG_PATH = REPO_ROOT / "config.json"
+PHASE0_OPTUNA_CONFIG_PATH = SCRIPT_DIR / "phase0_optuna_config.json"
+TRAINING_RUNS_DIR = SCRIPT_DIR / "training_runs"
+TRAINING_RUNNER_PATH = SCRIPT_DIR / "run_training_job.py"
+
+EXPECTED_OBJECTIVE_METRIC = "mean_per_output_relative_l2"
+OBJECTIVE_DESCRIPTION = (
+    "mean_j(||prediction_j-target_j||_2 / ||target_j||_2)"
+)
+
 DEFAULT_MODEL_NAME = (
     os.environ.get("COSMO_AGENT_MODEL", "phi4-mini:latest").strip()
     or "phi4-mini:latest"
@@ -31,49 +41,68 @@ DEFAULT_MODEL_NAME = (
 ACTIVE_MODEL_NAME = DEFAULT_MODEL_NAME
 MODEL_CAPABILITIES_CACHE: dict[str, set[str]] = {}
 
-# The real Phase 0 Optuna database included with this project.
-# Resolve it relative to this file so the agent works from any
-# current working directory.
-SCRIPT_DIR = Path(__file__).resolve().parent
-REPO_ROOT = SCRIPT_DIR.parent
-BASE_CONFIG_PATH = REPO_ROOT / "config.json"
-TRAINING_RUNS_DIR = SCRIPT_DIR / "training_runs"
-TRAINING_RUNNER_PATH = SCRIPT_DIR / "run_training_job.py"
-DATABASE_PATH = (
-    SCRIPT_DIR
-    / "phase0_optuna_results"
-    / "eps_0"
-    / "study.sqlite3"
-)
-STORAGE = f"sqlite:///{DATABASE_PATH.as_posix()}"
-
-# The real study name stored in the database above.
-STUDY_NAME = "phase0_tree_level_eps_0_lr_cde_bc_ratio"
-
-# Example relative SQLite URI:
-#
-# STORAGE = "sqlite:///cosmopinns_optuna.db"
-#
-# Example absolute SQLite URI:
-# STORAGE = "sqlite:////Users/your_name/project/cosmopinns_optuna.db"
-
-# Maximum number of model/tool turns allowed per answer:
-# Ollama -> tool -> Ollama -> tool -> ...
 MAX_AGENT_TURNS = 8
-
-# Maximum number of trials returned by get_top_trials.
 MAX_TOP_TRIALS = 10
-
-# Context window used for the persistent conversation. The model
-# supports a larger window, but 16K keeps local memory use practical.
 NUM_CONTEXT_TOKENS = 16384
-
-# Print tool calls and abbreviated tool results in the terminal.
 TRACE_TOOL_CALLS = True
-
-# Only one Agent-launched training job is allowed to run at a time. This
-# prevents two conversational requests from silently competing for a GPU.
 ACTIVE_TRAINING_STATES = {"queued", "running"}
+
+
+def _read_json_object(path: Path) -> dict[str, Any]:
+    with path.open("r", encoding="utf-8-sig") as handle:
+        payload = json.load(handle)
+    if not isinstance(payload, dict):
+        raise ValueError(f"Expected a JSON object in {path}")
+    return payload
+
+
+def _normalise_output_part(value: Any) -> str:
+    text = str(value if value is not None else "re").strip().lower()
+    if text in {"re", "real"}:
+        return "re"
+    if text in {"im", "imag", "imaginary"}:
+        return "im"
+    raise ValueError(f"Unsupported phase0 output part: {value!r}")
+
+
+def _eps_tag(value: Any) -> str:
+    eps = float(value)
+    if abs(eps) < 1e-12:
+        return "0"
+    magnitude = f"{abs(eps):.6g}".replace(".", "_")
+    return f"m{magnitude}" if eps < 0 else f"p{magnitude}"
+
+
+def _resolve_phase0_study() -> tuple[str, str, Path | None]:
+    """Resolve the same Phase-0 study name/storage used by phase0_optuna.py."""
+    base = _read_json_object(BASE_CONFIG_PATH)
+    tune = _read_json_object(PHASE0_OPTUNA_CONFIG_PATH)
+    format_values = {
+        "eps": float(base["eps_global"]),
+        "eps_tag": _eps_tag(base["eps_global"]),
+        "output_part": _normalise_output_part(base.get("phase0_output_part", "re")),
+    }
+    study_name = str(tune["study_name"]).format(**format_values)
+    output_dir_text = str(
+        tune.get("output_dir", "agent/phase0_optuna_results")
+    ).format(**format_values)
+    output_dir_config = Path(output_dir_text)
+    output_dir = (
+        output_dir_config
+        if output_dir_config.is_absolute()
+        else REPO_ROOT / output_dir_config
+    )
+
+    configured_storage = tune.get("storage")
+    if configured_storage:
+        return study_name, str(configured_storage), None
+
+    database_path = output_dir / "study.sqlite3"
+    storage = f"sqlite:///{database_path.as_posix()}"
+    return study_name, storage, database_path
+
+
+STUDY_NAME, STORAGE, DATABASE_PATH = _resolve_phase0_study()
 
 
 # ============================================================
@@ -81,18 +110,16 @@ ACTIVE_TRAINING_STATES = {"queued", "running"}
 # ============================================================
 
 def to_json(data: Any) -> str:
-    """
-    Convert Python data to readable JSON.
+    return json.dumps(data, ensure_ascii=False, indent=2, default=str)
 
-    default=str prevents uncommon Optuna attribute types from
-    causing JSON serialization failures.
-    """
-    return json.dumps(
-        data,
-        ensure_ascii=False,
-        indent=2,
-        default=str,
-    )
+
+def _write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    with temporary.open("w", encoding="utf-8") as handle:
+        json.dump(payload, handle, indent=2, ensure_ascii=False, allow_nan=False)
+        handle.write("\n")
+    temporary.replace(path)
 
 
 # ============================================================
@@ -161,21 +188,13 @@ def get_active_model_name() -> str:
 
 
 def _model_think_setting(model_name: str, capabilities: set[str]) -> str | bool:
-    # Ollama's named effort levels are model-specific. gpt-oss supports "low";
-    # use disabled thinking for other tool-capable models for broad compatibility.
     if "thinking" in capabilities and model_name.lower().startswith("gpt-oss:"):
         return "low"
     return False
 
 
 def list_ollama_models() -> str:
-    """
-    List locally installed Ollama models and their CosmoAgent compatibility.
-
-    Returns:
-        JSON containing installed names, capabilities, active state, and
-        whether each model supports the tool calling required by CosmoAgent.
-    """
+    """List installed Ollama models and CosmoAgent compatibility."""
     installed = _installed_ollama_model_names()
     entries: list[dict[str, Any]] = []
     for name in installed:
@@ -197,10 +216,6 @@ def list_ollama_models() -> str:
         "active_model": ACTIVE_MODEL_NAME,
         "default_model": DEFAULT_MODEL_NAME,
         "models": entries,
-        "selection": (
-            "Use switch_ollama_model, the /model command, --model at startup, "
-            "or COSMO_AGENT_MODEL."
-        ),
     })
 
 
@@ -221,17 +236,7 @@ def _activate_compatible_model(model_name: str) -> tuple[str, set[str], str]:
 
 
 def switch_ollama_model(model_name: str) -> str:
-    """
-    Switch CosmoAgent to another locally installed tool-capable Ollama model.
-
-    Call this tool only when the user explicitly asks to change models.
-
-    Args:
-        model_name: Installed Ollama model name, with or without :latest.
-
-    Returns:
-        JSON confirming the active model or explaining incompatibility.
-    """
+    """Switch to another installed tool-capable Ollama model."""
     try:
         resolved, capabilities, previous = _activate_compatible_model(model_name)
     except ValueError as exc:
@@ -240,7 +245,6 @@ def switch_ollama_model(model_name: str) -> str:
             "requested_model": model_name,
             "reason": str(exc),
         })
-
     return to_json({
         "status": "switched",
         "previous_model": previous,
@@ -252,49 +256,31 @@ def switch_ollama_model(model_name: str) -> str:
 
 
 # ============================================================
-# 4. Optuna study utilities
+# 4. Optuna study utilities and read-only tools
 # ============================================================
 
 def load_current_study() -> optuna.Study:
-    """
-    Load the configured Optuna study.
-
-    Raises:
-        RuntimeError: If the study cannot be loaded or is
-        a multi-objective study.
-    """
+    """Load the Phase-0 Optuna study resolved from the current configs."""
     try:
-        study = optuna.load_study(
-            study_name=STUDY_NAME,
-            storage=STORAGE,
-        )
+        study = optuna.load_study(study_name=STUDY_NAME, storage=STORAGE)
     except Exception as exc:
         raise RuntimeError(
-            "Unable to load the Optuna study.\n"
+            "Unable to load the Phase 0 Optuna study.\n"
             f"STORAGE = {STORAGE}\n"
             f"STUDY_NAME = {STUDY_NAME}\n"
             f"Original error: {exc}"
         ) from exc
 
-    # This implementation currently supports single-objective studies.
     if len(study.directions) != 1:
-        raise RuntimeError(
-            "This version of CosmoAgent supports only "
-            "single-objective Optuna studies."
-        )
-
+        raise RuntimeError("CosmoAgent supports only single-objective studies.")
     return study
 
 
 def get_direction_name(study: optuna.Study) -> str:
-    """Return MINIMIZE or MAXIMIZE."""
     return study.directions[0].name
 
 
-def get_completed_trials(
-    study: optuna.Study,
-) -> list[FrozenTrial]:
-    """Return completed trials with finite objective values."""
+def get_completed_trials(study: optuna.Study) -> list[FrozenTrial]:
     return [
         trial
         for trial in study.trials
@@ -304,112 +290,63 @@ def get_completed_trials(
     ]
 
 
-def find_trial(
-    study: optuna.Study,
-    trial_number: int,
-) -> FrozenTrial:
-    """
-    Find one trial by its Optuna trial number.
-
-    Raises:
-        ValueError: If no matching trial exists.
-    """
+def find_trial(study: optuna.Study, trial_number: int) -> FrozenTrial:
     for trial in study.trials:
         if trial.number == trial_number:
             return trial
-
-    raise ValueError(
-        f"Trial number {trial_number} does not exist."
-    )
+    raise ValueError(f"Trial number {trial_number} does not exist.")
 
 
-def duration_seconds(
-    duration: timedelta | None,
-) -> float | None:
-    """Convert a timedelta to seconds."""
-    if duration is None:
-        return None
-
-    return duration.total_seconds()
+def duration_seconds(duration: timedelta | None) -> float | None:
+    return None if duration is None else duration.total_seconds()
 
 
 def trial_to_dict(
     trial: FrozenTrial,
     include_intermediate_values: bool = False,
 ) -> dict[str, Any]:
-    """
-    Convert an Optuna FrozenTrial to a JSON-friendly dictionary.
-    """
     data: dict[str, Any] = {
         "trial_number": trial.number,
         "state": trial.state.name,
-        "objective_value": (
-            float(trial.value)
-            if trial.value is not None
-            else None
-        ),
+        "objective_value": float(trial.value) if trial.value is not None else None,
         "parameters": trial.params,
         "user_attributes": trial.user_attrs,
         "system_attributes": trial.system_attrs,
         "datetime_start": (
-            trial.datetime_start.isoformat()
-            if trial.datetime_start is not None
-            else None
+            trial.datetime_start.isoformat() if trial.datetime_start else None
         ),
         "datetime_complete": (
-            trial.datetime_complete.isoformat()
-            if trial.datetime_complete is not None
-            else None
+            trial.datetime_complete.isoformat() if trial.datetime_complete else None
         ),
         "duration_seconds": duration_seconds(trial.duration),
     }
-
     if include_intermediate_values:
-        # Keep only the latest 50 values to limit context growth.
         items = sorted(trial.intermediate_values.items())
         data["intermediate_values"] = {
-            str(step): float(value)
-            for step, value in items[-50:]
+            str(step): float(value) for step, value in items[-50:]
         }
-
     return data
 
 
-# ============================================================
-# 4. Read-only tools exposed to Ollama
-# ============================================================
-
 def get_study_summary() -> str:
-    """
-    Return an overall summary of the current Optuna study.
-
-    The result includes the optimization direction, trial counts,
-    current best trial, objective value, and available user-attribute
-    metric names.
-
-    Returns:
-        A JSON string containing the study summary.
-    """
+    """Return the current study, trial states, objective, and best trial."""
     study = load_current_study()
     completed = get_completed_trials(study)
+    signature = study.user_attrs.get("phase0_signature")
+    if not isinstance(signature, dict):
+        signature = {}
 
     state_counts = {
-        state.name: sum(
-            trial.state == state
-            for trial in study.trials
-        )
+        state.name: sum(trial.state == state for trial in study.trials)
         for state in TrialState
     }
-
     metric_counts: dict[str, int] = {}
-
     for trial in completed:
         for key in trial.user_attrs:
             metric_counts[key] = metric_counts.get(key, 0) + 1
 
     if completed:
         best_trial = study.best_trial
-
         best_result: dict[str, Any] | None = {
             "trial_number": best_trial.number,
             "objective_value": float(best_trial.value),
@@ -419,43 +356,42 @@ def get_study_summary() -> str:
     else:
         best_result = None
 
-    result = {
+    return to_json({
         "study_name": study.study_name,
         "storage": STORAGE,
+        "database_path": str(DATABASE_PATH) if DATABASE_PATH else None,
         "optimization_direction": get_direction_name(study),
+        "objective_metric": signature.get("objective_metric"),
+        "objective_definition": OBJECTIVE_DESCRIPTION,
         "total_trials": len(study.trials),
         "trial_state_counts": state_counts,
         "completed_trials_with_objective": len(completed),
         "best_trial": best_result,
         "recorded_user_attribute_keys": metric_counts,
+        "fixed_phase0_settings": {
+            "learning_rate_p0": signature.get("learning_rate_p0"),
+            "lambda2": signature.get("lambda2"),
+        },
         "warnings": [
-            (
-                "The best single trial is not necessarily a robust "
-                "configuration unless repeated-seed evidence exists."
-            ),
-            (
-                "Optuna parameter importance describes association "
-                "within this study and does not establish causality."
-            ),
+            "The best single trial is not automatically a robust configuration.",
+            "Optuna parameter importance is study-dependent association, not causality.",
         ],
-    }
-
-    return to_json(result)
+    })
 
 
 def _current_study_grounding_snapshot() -> str:
-    """Return compact authoritative study evidence for every Agent turn."""
     summary = json.loads(get_study_summary())
     compact = {
-        "data_source": str(DATABASE_PATH),
+        "data_source": str(DATABASE_PATH) if DATABASE_PATH else STORAGE,
         "study_name": summary["study_name"],
         "optimization_direction": summary["optimization_direction"],
+        "objective_metric": summary["objective_metric"],
+        "objective_definition": summary["objective_definition"],
         "total_trials": summary["total_trials"],
         "trial_state_counts": summary["trial_state_counts"],
-        "completed_trials_with_objective": summary[
-            "completed_trials_with_objective"
-        ],
+        "completed_trials_with_objective": summary["completed_trials_with_objective"],
         "best_trial": summary["best_trial"],
+        "fixed_phase0_settings": summary["fixed_phase0_settings"],
     }
     return json.dumps(compact, ensure_ascii=False, separators=(",", ":"))
 
@@ -464,18 +400,9 @@ def _direct_grounded_study_answer(
     user_message: str,
     grounding_snapshot: str,
 ) -> str | None:
-    """Answer simple best-trial lookups deterministically from SQLite data."""
     text = str(user_message).strip()
     lowered = text.lower()
-    robustness_terms = (
-        "robust",
-        "reliable",
-        "repeat",
-        "稳健",
-        "可靠",
-        "重复",
-    )
-    if any(term in lowered for term in robustness_terms):
+    if any(term in lowered for term in ("robust", "reliable", "repeat", "稳健", "可靠", "重复")):
         return None
 
     asks_best_trial = bool(
@@ -497,289 +424,129 @@ def _direct_grounded_study_answer(
     objective = float(best["objective_value"])
     parameters = best.get("parameters", {})
     direction = str(snapshot["optimization_direction"]).upper()
-    criterion = "lowest" if direction == "MINIMIZE" else "highest"
-    parameter_text = ", ".join(
-        f"{name}={value}"
-        for name, value in parameters.items()
-    )
+    parameter_text = ", ".join(f"{name}={value}" for name, value in parameters.items())
     is_chinese = any("\u4e00" <= char <= "\u9fff" for char in text)
     if is_chinese:
-        criterion_cn = "最低" if direction == "MINIMIZE" else "最高"
+        criterion = "最低" if direction == "MINIMIZE" else "最高"
         return (
             f"当前最佳的已完成 trial 是 Trial {number}。"
-            f"该 study 的方向是 {direction}，它的{criterion_cn}目标值为 "
-            f"{objective}；参数为：{parameter_text}。"
+            f"该 study 的方向是 {direction}，{criterion}目标值为 {objective}；"
+            f"参数为：{parameter_text}。"
         )
+    criterion = "lowest" if direction == "MINIMIZE" else "highest"
     return (
-        f"The best completed trial is Trial {number}. "
-        f"The study direction is {direction}, and it has the {criterion} "
-        f"objective value, {objective}. Parameters: {parameter_text}."
+        f"The best completed trial is Trial {number}. The study direction is "
+        f"{direction}, with the {criterion} objective value {objective}. "
+        f"Parameters: {parameter_text}."
     )
 
 
 def get_top_trials(n: int = 5) -> str:
-    """
-    Return the top completed trials ranked by objective value.
-
-    Args:
-        n: Number of top trials to return. Must be between 1 and 10.
-
-    Returns:
-        A JSON string containing ranked trials, objective differences,
-        parameters, and recorded user attributes.
-    """
+    """Return top completed trials ranked by the study objective."""
     study = load_current_study()
     completed = get_completed_trials(study)
-
     try:
         n = int(n)
     except (TypeError, ValueError):
         n = 5
-
     n = max(1, min(n, MAX_TOP_TRIALS))
-
     if not completed:
-        return to_json({
-            "status": "no_completed_trials",
-        })
+        return to_json({"status": "no_completed_trials"})
 
     direction = get_direction_name(study)
     reverse = direction == "MAXIMIZE"
-
-    ranked = sorted(
-        completed,
-        key=lambda trial: float(trial.value),
-        reverse=reverse,
-    )[:n]
-
+    ranked = sorted(completed, key=lambda trial: float(trial.value), reverse=reverse)[:n]
     best_value = float(ranked[0].value)
     output: list[dict[str, Any]] = []
-
     for rank, trial in enumerate(ranked, start=1):
         value = float(trial.value)
-
-        if direction == "MINIMIZE":
-            signed_difference = value - best_value
-        else:
-            signed_difference = best_value - value
-
-        if best_value != 0:
-            percentage_difference = (
-                100.0
-                * signed_difference
-                / abs(best_value)
-            )
-        else:
-            percentage_difference = None
-
+        difference = value - best_value if direction == "MINIMIZE" else best_value - value
+        percentage = 100.0 * difference / abs(best_value) if best_value != 0 else None
         output.append({
             "rank": rank,
             "trial_number": trial.number,
             "objective_value": value,
-            "absolute_difference_from_best": signed_difference,
-            "percentage_difference_from_best": (
-                percentage_difference
-            ),
+            "absolute_difference_from_best": difference,
+            "percentage_difference_from_best": percentage,
             "parameters": trial.params,
             "user_attributes": trial.user_attrs,
-            "duration_seconds": duration_seconds(
-                trial.duration
-            ),
+            "duration_seconds": duration_seconds(trial.duration),
         })
-
     return to_json({
         "optimization_direction": direction,
+        "objective_definition": OBJECTIVE_DESCRIPTION,
         "number_requested": n,
         "trials": output,
     })
 
 
-def get_trial_details(
-    trial_number: int,
-) -> str:
-    """
-    Return detailed information for one Optuna trial.
-
-    Args:
-        trial_number: The integer trial number shown by Optuna.
-
-    Returns:
-        A JSON string containing trial parameters, objective,
-        attributes, timing, state, and recent intermediate values.
-    """
+def get_trial_details(trial_number: int) -> str:
+    """Return details and intermediate values for one Optuna trial."""
     study = load_current_study()
-
     try:
-        trial_number = int(trial_number)
+        number = int(trial_number)
     except (TypeError, ValueError) as exc:
-        return to_json({
-            "status": "error",
-            "reason": (
-                "trial_number must be an integer."
-            ),
-            "details": str(exc),
-        })
-
+        return to_json({"status": "error", "reason": "trial_number must be an integer.", "details": str(exc)})
     try:
-        trial = find_trial(study, trial_number)
+        trial = find_trial(study, number)
     except ValueError as exc:
-        return to_json({
-            "status": "not_found",
-            "reason": str(exc),
-        })
-
-    return to_json(
-        trial_to_dict(
-            trial,
-            include_intermediate_values=True,
-        )
-    )
+        return to_json({"status": "not_found", "reason": str(exc)})
+    return to_json(trial_to_dict(trial, include_intermediate_values=True))
 
 
-def compare_trials(
-    trial_numbers_csv: str,
-) -> str:
-    """
-    Compare selected Optuna trials.
-
-    Args:
-        trial_numbers_csv: Comma-separated trial numbers,
-            for example "13,7,18".
-
-    Returns:
-        A JSON string containing the selected trials ranked
-        according to the study optimization direction.
-    """
+def compare_trials(trial_numbers_csv: str) -> str:
+    """Compare selected Optuna trial numbers."""
     study = load_current_study()
-
     try:
-        numbers = [
-            int(item.strip())
-            for item in trial_numbers_csv.split(",")
-            if item.strip()
-        ]
+        numbers = [int(item.strip()) for item in trial_numbers_csv.split(",") if item.strip()]
     except (AttributeError, TypeError, ValueError) as exc:
-        return to_json({
-            "status": "error",
-            "reason": (
-                "Provide comma-separated integer trial numbers."
-            ),
-            "details": str(exc),
-        })
-
-    # Remove duplicate trial numbers while preserving their order.
+        return to_json({"status": "error", "reason": "Provide comma-separated integer trial numbers.", "details": str(exc)})
     numbers = list(dict.fromkeys(numbers))
-
     if not numbers:
-        return to_json({
-            "status": "error",
-            "reason": "No trial numbers were provided.",
-        })
-
+        return to_json({"status": "error", "reason": "No trial numbers were provided."})
     if len(numbers) > 10:
-        return to_json({
-            "status": "error",
-            "reason": (
-                "At most 10 trials can be compared at once."
-            ),
-        })
+        return to_json({"status": "error", "reason": "At most 10 trials can be compared at once."})
 
     selected: list[FrozenTrial] = []
     missing: list[int] = []
-
     for number in numbers:
         try:
             selected.append(find_trial(study, number))
         except ValueError:
             missing.append(number)
 
-    complete_selected = [
-        trial
-        for trial in selected
-        if trial.state == TrialState.COMPLETE
-        and trial.value is not None
-    ]
-
+    complete = [trial for trial in selected if trial.state == TrialState.COMPLETE and trial.value is not None]
     direction = get_direction_name(study)
-    reverse = direction == "MAXIMIZE"
-
-    ranked = sorted(
-        complete_selected,
-        key=lambda trial: float(trial.value),
-        reverse=reverse,
-    )
-
-    result = {
+    ranked = sorted(complete, key=lambda trial: float(trial.value), reverse=direction == "MAXIMIZE")
+    return to_json({
         "optimization_direction": direction,
+        "objective_definition": OBJECTIVE_DESCRIPTION,
         "requested_trial_numbers": numbers,
         "missing_trial_numbers": missing,
-        "ranked_completed_trials": [
-            trial_to_dict(
-                trial,
-                include_intermediate_values=False,
-            )
-            for trial in ranked
-        ],
+        "ranked_completed_trials": [trial_to_dict(trial) for trial in ranked],
         "noncompleted_trials": [
-            trial_to_dict(
-                trial,
-                include_intermediate_values=False,
-            )
+            trial_to_dict(trial)
             for trial in selected
-            if trial.state != TrialState.COMPLETE
-            or trial.value is None
+            if trial.state != TrialState.COMPLETE or trial.value is None
         ],
-    }
-
-    return to_json(result)
+    })
 
 
 def get_parameter_importance() -> str:
-    """
-    Estimate parameter importance for the current Optuna study.
-
-    Returns:
-        A JSON string containing normalized importance scores.
-
-    Notes:
-        Importance scores are study-dependent associations.
-        They must not be described as causal physical effects.
-    """
+    """Estimate Optuna parameter importance for the current study."""
     study = load_current_study()
     completed = get_completed_trials(study)
-
     if len(completed) < 2:
-        return to_json({
-            "status": "unavailable",
-            "reason": (
-                "At least two completed trials are required."
-            ),
-        })
-
+        return to_json({"status": "unavailable", "reason": "At least two completed trials are required."})
     try:
         importance = get_param_importances(study)
     except Exception as exc:
-        return to_json({
-            "status": "unavailable",
-            "reason": str(exc),
-            "possible_causes": [
-                "Too few completed trials.",
-                "Conditional parameters are not shared by enough trials.",
-                "The objective contains invalid or nonfinite values.",
-            ],
-        })
-
+        return to_json({"status": "unavailable", "reason": str(exc)})
     return to_json({
         "status": "available",
         "importance_scores": importance,
-        "interpretation": (
-            "Higher scores indicate a stronger association with "
-            "objective variation inside this Optuna study."
-        ),
-        "warning": (
-            "These values do not prove that a parameter physically "
-            "or causally produced an improvement."
-        ),
+        "interpretation": "Higher scores indicate stronger association with objective variation inside this study.",
+        "warning": "These values do not establish physical causality.",
     })
 
 
@@ -789,23 +556,6 @@ def get_parameter_importance() -> str:
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
-
-
-def _read_json_object(path: Path) -> dict[str, Any]:
-    with path.open("r", encoding="utf-8-sig") as handle:
-        payload = json.load(handle)
-    if not isinstance(payload, dict):
-        raise ValueError(f"Expected a JSON object in {path}")
-    return payload
-
-
-def _write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix(path.suffix + ".tmp")
-    with temporary.open("w", encoding="utf-8") as handle:
-        json.dump(payload, handle, indent=2, ensure_ascii=False, allow_nan=False)
-        handle.write("\n")
-    temporary.replace(path)
 
 
 def _normalise_training_phase(value: str) -> str:
@@ -822,9 +572,7 @@ def _normalise_training_phase(value: str) -> str:
         "phase_0_phase_2": "phase0_phase2",
     }
     if text not in aliases:
-        raise ValueError(
-            "phase must be one of: phase0, phase0_phase1, phase0_phase2"
-        )
+        raise ValueError("phase must be one of: phase0, phase0_phase1, phase0_phase2")
     return aliases[text]
 
 
@@ -841,30 +589,22 @@ def _best_training_trial() -> tuple[optuna.Study, FrozenTrial]:
     if not completed:
         raise RuntimeError("The configured Optuna study has no completed finite trial.")
     trial = study.best_trial
-    required = {"learning_rate", "cde_bc_ratio"}
-    missing = sorted(required - set(trial.params))
-    if missing:
-        raise RuntimeError(
-            "The best trial is missing required Phase 0 parameters: "
-            + ", ".join(missing)
-        )
+    if "lambda1" not in trial.params:
+        raise RuntimeError("The best trial is missing the required Phase 0 parameter: lambda1")
     return study, trial
 
 
-def _validate_study_compatibility(
-    study: optuna.Study,
-    config: dict[str, Any],
-) -> None:
+def _validate_study_compatibility(study: optuna.Study, config: dict[str, Any]) -> None:
     signature = study.user_attrs.get("phase0_signature")
     if not isinstance(signature, dict):
         raise RuntimeError(
-            "The Optuna study has no phase0_signature, so its physical/model "
-            "setup cannot be verified against config.json."
+            "The Optuna study has no phase0_signature, so its setup cannot be "
+            "verified against config.json."
         )
 
     expected = {
         "eps_global": float(config["eps_global"]),
-        "output_part": str(config.get("phase0_output_part", "re")).strip().lower(),
+        "output_part": _normalise_output_part(config.get("phase0_output_part", "re")),
         "domain": [
             float(config["x1_min"]),
             float(config["x1_max"]),
@@ -873,19 +613,30 @@ def _validate_study_compatibility(
         ],
         "hidden_size": int(config["hidden_size"]),
         "n_hidden_layers": int(config["n_hidden_layers"]),
+        "learning_rate_p0": float(config["learning_rate_p0"]),
+        "lambda2": float(config.get("lambda2", 1.0)),
+        "objective_metric": EXPECTED_OBJECTIVE_METRIC,
     }
-    observed = {
-        "eps_global": float(signature["eps_global"]),
-        "output_part": str(signature["output_part"]).strip().lower(),
-        "domain": [float(value) for value in signature["domain"]],
-        "hidden_size": int(signature["hidden_size"]),
-        "n_hidden_layers": int(signature["n_hidden_layers"]),
-    }
+    try:
+        observed = {
+            "eps_global": float(signature["eps_global"]),
+            "output_part": _normalise_output_part(signature["output_part"]),
+            "domain": [float(value) for value in signature["domain"]],
+            "hidden_size": int(signature["hidden_size"]),
+            "n_hidden_layers": int(signature["n_hidden_layers"]),
+            "learning_rate_p0": float(signature["learning_rate_p0"]),
+            "lambda2": float(signature["lambda2"]),
+            "objective_metric": str(signature["objective_metric"]),
+        }
+    except (KeyError, TypeError, ValueError) as exc:
+        raise RuntimeError(
+            "The Optuna study signature is incomplete for the current lambda-only workflow."
+        ) from exc
+
     if observed != expected:
         raise RuntimeError(
-            "The Optuna study is incompatible with the current Phase 0 "
-            "physical/model configuration. Run a matching study before "
-            f"training. Study signature={observed}; config signature={expected}"
+            "The Optuna study is incompatible with the current Phase 0 config. "
+            f"Study signature={observed}; config signature={expected}"
         )
 
 
@@ -907,15 +658,13 @@ def _build_training_config(
     config = _read_json_object(BASE_CONFIG_PATH)
     study, trial = _best_training_trial()
     _validate_study_compatibility(study, config)
-    learning_rate = float(trial.params["learning_rate"])
-    cde_bc_ratio = float(trial.params["cde_bc_ratio"])
 
-    # Train from scratch with production data/epoch settings from config.json,
-    # replacing only the Phase 0 hyperparameters selected by Optuna.
+    lambda1 = float(trial.params["lambda1"])
+    learning_rate_p0 = float(config["learning_rate_p0"])
+    lambda2 = float(config.get("lambda2", 1.0))
+
     overrides: dict[str, Any] = {
-        "learning_rate_p0": learning_rate,
-        "lambda1": cde_bc_ratio,
-        "lambda2": 1.0,
+        "lambda1": lambda1,
         "use_local_config": False,
         "reuse_saved_models": False,
         "reuse_eval_bundle": False,
@@ -944,14 +693,16 @@ def _build_training_config(
         "study_name": study.study_name,
         "trial_number": int(trial.number),
         "objective_value": float(trial.value),
-        "optuna_parameters": {
-            "learning_rate": learning_rate,
-            "cde_bc_ratio": cde_bc_ratio,
+        "objective_definition": OBJECTIVE_DESCRIPTION,
+        "optuna_parameters": {"lambda1": lambda1},
+        "fixed_config_parameters": {
+            "learning_rate_p0": learning_rate_p0,
+            "lambda2": lambda2,
         },
         "config_mapping": {
-            "learning_rate_p0": learning_rate,
-            "lambda1": cde_bc_ratio,
-            "lambda2": 1.0,
+            "lambda1": lambda1,
+            "learning_rate_p0": learning_rate_p0,
+            "lambda2": lambda2,
         },
         "phase": phase,
         "phase0_epochs": int(config["phase0_epochs"]),
@@ -965,17 +716,7 @@ def preview_cosmopinns_training(
     phase0_epochs: int = 0,
     device: str = "config",
 ) -> str:
-    """
-    Preview a CosmoPINNs training configuration without starting training.
-
-    Args:
-        phase: Training pipeline: phase0, phase0_phase1, or phase0_phase2.
-        phase0_epochs: Optional Phase 0 epoch override. Use 0 to keep config.json.
-        device: config, auto, cpu, cuda, or mps.
-
-    Returns:
-        JSON describing the selected Optuna trial and effective training setup.
-    """
+    """Preview a training config using the best lambda1 without starting a run."""
     config, selection = _build_training_config(
         phase=phase,
         phase0_epochs=phase0_epochs,
@@ -989,14 +730,17 @@ def preview_cosmopinns_training(
             "n_coll": config.get("n_coll"),
             "phase0_epochs": config.get("phase0_epochs"),
             "warmup_epochs_p0": config.get("warmup_epochs_p0"),
+            "learning_rate_p0": config.get("learning_rate_p0"),
+            "lambda1": config.get("lambda1"),
+            "lambda2": config.get("lambda2"),
             "phase0_output_part": config.get("phase0_output_part"),
             "eps_global": config.get("eps_global"),
             "enable_phase1": config.get("enable_phase1"),
             "enable_phase2": config.get("enable_phase2"),
         },
         "note": (
-            "The Optuna checkpoint is not resumed. Final training starts from "
-            "a new model using the selected hyperparameters."
+            "Final training starts from a new model. Only lambda1 comes from "
+            "Optuna; learning_rate_p0 and lambda2 remain fixed by config.json."
         ),
     })
 
@@ -1029,8 +773,8 @@ def _refresh_job(payload: dict[str, Any], metadata_path: Path) -> dict[str, Any]
         payload["status"] = "terminated_unknown"
         payload["finished_at"] = payload.get("finished_at") or _utc_now()
         payload["status_note"] = (
-            "The recorded runner process is no longer active and did not "
-            "write a final exit status."
+            "The recorded runner process is no longer active and did not write "
+            "a final exit status."
         )
         _write_json_atomic(metadata_path, payload)
     return payload
@@ -1041,8 +785,7 @@ def _active_training_jobs() -> list[dict[str, Any]]:
     now = datetime.now(timezone.utc)
     for path in _job_metadata_paths():
         payload = _refresh_job(_read_json_object(path), path)
-        status = payload.get("status")
-        if status == "queued":
+        if payload.get("status") == "queued":
             try:
                 created = datetime.fromisoformat(str(payload["created_at"]))
                 if created.tzinfo is None:
@@ -1065,31 +808,14 @@ def start_cosmopinns_training(
     phase0_epochs: int = 0,
     device: str = "config",
 ) -> str:
-    """
-    Start a background CosmoPINNs run using the best Optuna Phase 0 trial.
-
-    Call this state-changing tool only when the user explicitly asks to start
-    or run training. It creates an isolated config, log, and results directory.
-
-    Args:
-        phase: Training pipeline: phase0, phase0_phase1, or phase0_phase2.
-        phase0_epochs: Optional Phase 0 epoch override. Use 0 to keep config.json.
-        device: config, auto, cpu, cuda, or mps.
-
-    Returns:
-        JSON with the launched job ID and paths used to monitor the run.
-    """
+    """Start a background CosmoPINNs run using the best Optuna lambda1."""
     active = _active_training_jobs()
     if active:
         return to_json({
             "status": "not_started",
             "reason": "Another CosmoAgent training job is already active.",
             "active_jobs": [
-                {
-                    "job_id": item.get("job_id"),
-                    "status": item.get("status"),
-                    "pid": item.get("pid"),
-                }
+                {"job_id": item.get("job_id"), "status": item.get("status"), "pid": item.get("pid")}
                 for item in active
             ],
         })
@@ -1159,9 +885,7 @@ def start_cosmopinns_training(
         "runner_pid": process.pid,
         "selection": selection,
         "paths": metadata["paths"],
-        "next_action": (
-            "Use get_training_status with this job_id to read status and log output."
-        ),
+        "next_action": "Use get_training_status with this job_id to monitor the run.",
     })
 
 
@@ -1181,20 +905,8 @@ def _resolve_job_metadata(job_id: str) -> Path:
     return path
 
 
-def get_training_status(
-    job_id: str = "latest",
-    tail_lines: int = 30,
-) -> str:
-    """
-    Return status and recent log lines for a CosmoAgent training job.
-
-    Args:
-        job_id: Job ID returned by start_cosmopinns_training, or latest.
-        tail_lines: Number of recent log lines to return, from 0 through 100.
-
-    Returns:
-        JSON containing persisted process state, paths, and the log tail.
-    """
+def get_training_status(job_id: str = "latest", tail_lines: int = 30) -> str:
+    """Return persisted status and recent log lines for one training job."""
     try:
         tail_lines = max(0, min(int(tail_lines), 100))
     except (TypeError, ValueError):
@@ -1205,22 +917,13 @@ def get_training_status(
     log_tail: list[str] = []
     if tail_lines and log_path.is_file():
         with log_path.open("r", encoding="utf-8", errors="replace") as handle:
-            log_tail = handle.readlines()[-tail_lines:]
-        log_tail = [line.rstrip("\n") for line in log_tail]
+            log_tail = [line.rstrip("\n") for line in handle.readlines()[-tail_lines:]]
     payload["log_tail"] = log_tail
     return to_json(payload)
 
 
 def list_training_jobs(limit: int = 10) -> str:
-    """
-    List recent CosmoAgent-launched CosmoPINNs training jobs.
-
-    Args:
-        limit: Maximum number of recent jobs to return, from 1 through 20.
-
-    Returns:
-        JSON containing compact job status records.
-    """
+    """List recent CosmoAgent-launched training jobs."""
     try:
         limit = max(1, min(int(limit), 20))
     except (TypeError, ValueError):
@@ -1245,10 +948,7 @@ def list_training_jobs(limit: int = 10) -> str:
 # 6. Tool registry
 # ============================================================
 
-AVAILABLE_FUNCTIONS: dict[
-    str,
-    Callable[..., str],
-] = {
+AVAILABLE_FUNCTIONS: dict[str, Callable[..., str]] = {
     "list_ollama_models": list_ollama_models,
     "switch_ollama_model": switch_ollama_model,
     "get_study_summary": get_study_summary,
@@ -1261,10 +961,7 @@ AVAILABLE_FUNCTIONS: dict[
     "get_training_status": get_training_status,
     "list_training_jobs": list_training_jobs,
 }
-
-# Ollama Python SDK can derive tool schemas from signatures/docstrings
 TOOLS = list(AVAILABLE_FUNCTIONS.values())
-
 
 PSEUDO_TOOL_PATTERN = re.compile(
     r"\[DATA\]\s*(.*?)\s*\[/DATA\]",
@@ -1276,38 +973,18 @@ def _invoke_registered_tool(
     tool_name: str,
     arguments: dict[str, Any] | None = None,
 ) -> str:
-    arguments = dict(arguments or {})
     function = AVAILABLE_FUNCTIONS.get(tool_name)
     if function is None:
-        return to_json({
-            "status": "error",
-            "reason": f"Unknown tool: {tool_name}",
-        })
+        return to_json({"status": "error", "reason": f"Unknown tool: {tool_name}"})
     try:
-        return function(**arguments)
+        return function(**dict(arguments or {}))
     except TypeError as exc:
-        return to_json({
-            "status": "error",
-            "tool": tool_name,
-            "reason": "Invalid tool arguments.",
-            "details": str(exc),
-        })
+        return to_json({"status": "error", "tool": tool_name, "reason": "Invalid tool arguments.", "details": str(exc)})
     except Exception as exc:
-        return to_json({
-            "status": "error",
-            "tool": tool_name,
-            "reason": str(exc),
-        })
+        return to_json({"status": "error", "tool": tool_name, "reason": str(exc)})
 
 
-def _extract_pseudo_tool_call(
-    content: str,
-) -> tuple[str, dict[str, Any]] | None:
-    """
-    Parse text-style tool requests emitted by some smaller Ollama models.
-
-    Example accepted form: [DATA]GET_STUDY_SUMMARY[/DATA]
-    """
+def _extract_pseudo_tool_call(content: str) -> tuple[str, dict[str, Any]] | None:
     match = PSEUDO_TOOL_PATTERN.search(content or "")
     if match is None:
         return None
@@ -1318,7 +995,7 @@ def _extract_pseudo_tool_call(
         try:
             payload = json.loads(body)
         except json.JSONDecodeError:
-            return ("__invalid_pseudo_tool__", {})
+            return "__invalid_pseudo_tool__", {}
         name = str(payload.get("name", "")).strip()
         raw_arguments = payload.get("arguments", {})
         if isinstance(raw_arguments, dict):
@@ -1330,18 +1007,16 @@ def _extract_pseudo_tool_call(
             flags=re.DOTALL,
         )
         if name_match is None:
-            return ("__invalid_pseudo_tool__", {})
+            return "__invalid_pseudo_tool__", {}
         name = name_match.group(1)
         if name_match.group(2):
             try:
-                parsed_arguments = json.loads(name_match.group(2))
+                parsed = json.loads(name_match.group(2))
             except json.JSONDecodeError:
-                return ("__invalid_pseudo_tool__", {})
-            if isinstance(parsed_arguments, dict):
-                arguments = parsed_arguments
-
-    normalized = name.strip().lower()
-    return normalized, arguments
+                return "__invalid_pseudo_tool__", {}
+            if isinstance(parsed, dict):
+                arguments = parsed
+    return name.strip().lower(), arguments
 
 
 # ============================================================
@@ -1349,69 +1024,39 @@ def _extract_pseudo_tool_call(
 # ============================================================
 
 SYSTEM_PROMPT = """
-You are CosmoAgent, a scientific machine-learning experiment-analysis
-and training-operations agent for CosmoPINNs.
+You are CosmoAgent, a scientific machine-learning experiment-analysis and
+training-operations agent for CosmoPINNs.
 
-You have tools that query an existing Optuna study and tools that can
-launch and monitor isolated CosmoPINNs training jobs.
-
-Core behavior:
-1. Understand the user's question.
-2. Decide which tools are needed.
-3. Call only the necessary tools.
-4. Inspect the returned study data.
-5. If more evidence is required, call another appropriate tool.
-6. Stop when enough evidence has been collected.
-7. Answer in the same language as the user.
+You have tools for the configured Phase-0 Optuna study and tools that can launch
+and monitor isolated CosmoPINNs training jobs.
 
 Scientific rules:
 - Obtain every numerical statement about the Optuna study from tools.
-- Never invent trials, objective values, parameters, metrics, or
-  physical explanations.
-- Respect the study's MINIMIZE or MAXIMIZE direction.
-- Say "lowest objective value" for a MINIMIZE study.
-- A best trial is not automatically a robust configuration.
-- Do not claim robustness without repeated-seed evidence.
+- Never invent trials, objective values, parameters, metrics, or physical explanations.
+- Respect the study's MINIMIZE/MAXIMIZE direction.
+- The current Phase-0 tuner searches only lambda1. learning_rate_p0 and lambda2
+  are fixed by the root config.json and are not Optuna parameters.
+- The Phase-0 objective is the equal-weight mean over outputs of
+  ||prediction_j-target_j||_2 / ||target_j||_2. Lower is better.
+- A best trial is not automatically robust; do not claim robustness without
+  repeated-seed evidence.
 - Parameter importance indicates association, not causality.
 - Clearly distinguish observations from hypotheses.
-- If the study lacks the data needed to answer, say so explicitly.
-- Do not recommend a larger dataset unless dataset information was
-  actually provided.
 - Never modify Optuna trials or the Optuna database.
-- Start training only when the user explicitly asks to start, run, or
-  launch training. Questions about whether training is possible, requests
-  for explanations, and hypothetical discussions do not authorize a run.
-- When a user explicitly asks to train with the best Optuna result, call
+- Start training only when the user explicitly asks to start, run, or launch it.
+- When explicitly asked to train with the best Optuna result, call
   start_cosmopinns_training. Do not merely describe shell commands.
-- The default training pipeline is phase0. Use phase0_phase1 or
-  phase0_phase2 only when the user explicitly requests that transfer stage.
+- The default training pipeline is phase0. Use phase0_phase1 or phase0_phase2
+  only when the user explicitly requests that transfer stage.
 - phase0_epochs=0 means keep the production value from config.json.
-- Use preview_cosmopinns_training when the user asks to inspect the
-  effective configuration without launching work.
-- Training runs in the background. After launching, report the job ID and
-  tell the user that get_training_status can monitor it.
-- Use get_training_status for progress or completion questions. Never
-  claim success until its persisted status is succeeded.
-- When the user asks which local models are available, call
-  list_ollama_models.
-- Switch models only when the user explicitly asks to switch or use a
-  named model. Call switch_ollama_model and report whether it succeeded.
-- A model without Ollama tool support is incompatible with CosmoAgent,
-  even if it can answer ordinary chat questions.
-- A CURRENT_STUDY_SNAPSHOT system message is authoritative and comes
-  directly from the configured SQLite database. Use it for basic study
-  facts and never contradict it.
+- Use preview_cosmopinns_training when the user asks to inspect the effective
+  configuration without launching work.
+- Training runs in the background; use get_training_status for progress or
+  completion questions and never claim success until the persisted status is succeeded.
+- Switch Ollama models only when explicitly requested.
+- A CURRENT_STUDY_SNAPSHOT system message is authoritative SQLite data.
 - Never print textual placeholders such as [DATA]GET_STUDY_SUMMARY[/DATA].
-  Use native tool calls. If a compatibility layer supplies a tool result,
-  answer from that result.
-- Do not repeatedly call the same tool with identical arguments unless
-  new information makes it necessary.
-
-Conversation rules:
-- Remember results already obtained earlier in the conversation.
-- A follow-up question may be answered from previous tool results.
-- When the user asks for a new numerical fact, use the relevant tool.
-- Keep final answers precise and scientifically conservative.
+- Answer in the same language as the user and keep answers precise.
 """
 
 
@@ -1420,60 +1065,26 @@ Conversation rules:
 # ============================================================
 
 class CosmoAgentSession:
-    """
-    Persistent conversational Agent.
-
-    The message history stores:
-    - system instructions;
-    - user messages;
-    - assistant tool requests;
-    - tool results;
-    - final assistant answers.
-    """
-
     def __init__(self) -> None:
-        self.messages: list[Any] = [
-            {
-                "role": "system",
-                "content": SYSTEM_PROMPT,
-            }
-        ]
+        self.messages: list[Any] = [{"role": "system", "content": SYSTEM_PROMPT}]
 
     def ask(self, user_message: str) -> str:
-        """
-        Send one user message and run the multi-turn Agent loop.
-
-        The model may call zero, one, or several tools before
-        producing its final answer.
-        """
         grounding_snapshot = _current_study_grounding_snapshot()
         self.messages.append({
             "role": "system",
             "content": (
-                "CURRENT_STUDY_SNAPSHOT (authoritative SQLite data; do not "
-                "invent or contradict numerical study facts):\n"
-                + grounding_snapshot
+                "CURRENT_STUDY_SNAPSHOT (authoritative SQLite data; do not invent "
+                "or contradict numerical study facts):\n" + grounding_snapshot
             ),
         })
-        self.messages.append({
-            "role": "user",
-            "content": user_message,
-        })
-        direct_answer = _direct_grounded_study_answer(
-            user_message,
-            grounding_snapshot,
-        )
+        self.messages.append({"role": "user", "content": user_message})
+
+        direct_answer = _direct_grounded_study_answer(user_message, grounding_snapshot)
         if direct_answer is not None:
-            self.messages.append({
-                "role": "assistant",
-                "content": direct_answer,
-            })
+            self.messages.append({"role": "assistant", "content": direct_answer})
             return direct_answer
 
-        for agent_turn in range(
-            1,
-            MAX_AGENT_TURNS + 1,
-        ):
+        for agent_turn in range(1, MAX_AGENT_TURNS + 1):
             model_name = get_active_model_name()
             capabilities = _get_model_capabilities(model_name)
             response: ollama.ChatResponse = ollama.chat(
@@ -1481,30 +1092,15 @@ class CosmoAgentSession:
                 messages=self.messages,
                 tools=TOOLS,
                 think=_model_think_setting(model_name, capabilities),
-                options={
-                    "temperature": 0,
-                    "num_ctx": NUM_CONTEXT_TOKENS,
-                },
+                options={"temperature": 0, "num_ctx": NUM_CONTEXT_TOKENS},
             )
-
-            # Preserve the assistant message, including any tool calls.
             self.messages.append(response.message)
+            tool_calls = response.message.tool_calls or []
 
-            tool_calls = (
-                response.message.tool_calls or []
-            )
-
-            # No tool call means the model is ready to answer.
             if not tool_calls:
-                final_content = (
-                    response.message.content or ""
-                ).strip()
-
+                final_content = (response.message.content or "").strip()
                 if not final_content:
-                    return (
-                        "The model returned an empty response "
-                        "without requesting a tool."
-                    )
+                    return "The model returned an empty response without requesting a tool."
 
                 pseudo_call = _extract_pseudo_tool_call(final_content)
                 if pseudo_call is not None:
@@ -1517,52 +1113,26 @@ class CosmoAgentSession:
                     self.messages.append({
                         "role": "system",
                         "content": (
-                            f"AUTHORITATIVE TOOL RESULT for {tool_name}:\n"
-                            f"{tool_result}\n"
-                            "Now answer the user's question directly. Do not "
-                            "repeat a [DATA] placeholder."
+                            f"AUTHORITATIVE TOOL RESULT for {tool_name}:\n{tool_result}\n"
+                            "Now answer the user's question directly. Do not repeat a [DATA] placeholder."
                         ),
                     })
                     continue
-
                 return final_content
 
             if TRACE_TOOL_CALLS:
-                print(
-                    f"\n[Agent tool turn {agent_turn}]"
-                )
+                print(f"\n[Agent tool turn {agent_turn}]")
 
-            # One assistant message may contain several tool calls.
             for tool_call in tool_calls:
                 tool_name = tool_call.function.name
-                arguments = dict(
-                    tool_call.function.arguments or {}
-                )
-
+                arguments = dict(tool_call.function.arguments or {})
                 if TRACE_TOOL_CALLS:
                     print(f"[Tool] {tool_name}")
-                    print(
-                        "[Arguments] "
-                        + to_json(arguments)
-                    )
-
+                    print("[Arguments] " + to_json(arguments))
                 tool_result = _invoke_registered_tool(tool_name, arguments)
-
                 if TRACE_TOOL_CALLS:
-                    preview = tool_result
-
-                    if len(preview) > 1500:
-                        preview = (
-                            preview[:1500]
-                            + "\n... [truncated]"
-                        )
-
-                    print(
-                        "[Tool result]\n"
-                        + preview
-                    )
-
-                # Add the real tool result for the model's next turn.
+                    preview = tool_result if len(tool_result) <= 1500 else tool_result[:1500] + "\n... [truncated]"
+                    print("[Tool result]\n" + preview)
                 self.messages.append({
                     "role": "tool",
                     "tool_name": tool_name,
@@ -1570,22 +1140,14 @@ class CosmoAgentSession:
                 })
 
         return (
-            "CosmoAgent reached the maximum number "
-            f"of tool turns ({MAX_AGENT_TURNS}) "
-            "without producing a final answer."
+            "CosmoAgent reached the maximum number of tool turns "
+            f"({MAX_AGENT_TURNS}) without producing a final answer."
         )
 
     def reset(self) -> None:
-        """Clear the conversation while preserving system rules."""
-        self.messages = [
-            {
-                "role": "system",
-                "content": SYSTEM_PROMPT,
-            }
-        ]
+        self.messages = [{"role": "system", "content": SYSTEM_PROMPT}]
 
     def message_count(self) -> int:
-        """Return the number of stored conversation messages."""
         return len(self.messages)
 
 
@@ -1594,43 +1156,31 @@ class CosmoAgentSession:
 # ============================================================
 
 def check_ollama_configuration(model_name: str) -> tuple[str, set[str]]:
-    """Verify and activate one installed tool-capable Ollama model."""
     try:
         resolved, capabilities, _ = _activate_compatible_model(model_name)
     except Exception as exc:
         raise RuntimeError(
             "Unable to activate the requested Ollama model.\n"
-            f"MODEL = {model_name}\n"
-            f"Original error: {exc}\n"
-            "Make sure Ollama is running, then use `ollama list` to inspect "
-            "installed models."
+            f"MODEL = {model_name}\nOriginal error: {exc}\n"
+            "Make sure Ollama is running and inspect installed models with `ollama list`."
         ) from exc
     return resolved, capabilities
 
 
 def check_study_configuration() -> None:
-    """
-    Verify that the configured Optuna study can be loaded.
-    """
     study = load_current_study()
     completed = get_completed_trials(study)
-
     print("Optuna study loaded successfully.")
-    print(f"Database path: {DATABASE_PATH}")
+    print(f"Database path: {DATABASE_PATH if DATABASE_PATH else STORAGE}")
     print(f"Study name: {study.study_name}")
     print(f"Direction: {get_direction_name(study)}")
+    print(f"Objective: {OBJECTIVE_DESCRIPTION}")
     print(f"Total trials: {len(study.trials)}")
     print(f"Completed trials: {len(completed)}")
-
     if completed:
-        print(
-            "Best trial: "
-            f"{study.best_trial.number}"
-        )
-        print(
-            "Best objective value: "
-            f"{study.best_value}"
-        )
+        print(f"Best trial: {study.best_trial.number}")
+        print(f"Best objective value: {study.best_value}")
+        print(f"Best lambda1: {study.best_trial.params.get('lambda1')}")
 
 
 # ============================================================
@@ -1640,53 +1190,23 @@ def check_study_configuration() -> None:
 HELP_TEXT = """
 Available commands:
 
-  /help
-      Show this help message.
-
-  /reset
-      Clear the current conversation history.
-
-  /status
-      Show the active model and number of messages in the current session.
-
-  /models
-      List installed Ollama models and CosmoAgent compatibility.
-
-  /study
-      Print the current SQLite study summary without using the language model.
-
-  /model MODEL_NAME
-      Switch models while preserving the conversation, for example:
-      /model qwen3:1.7b
-
-  /exit
-      Exit CosmoAgent.
+  /help       Show this help message.
+  /reset      Clear the conversation history.
+  /status     Show active model and message count.
+  /models     List installed Ollama models.
+  /study      Print the current SQLite study summary directly.
+  /model NAME Switch Ollama model while preserving the conversation.
+  /exit       Exit CosmoAgent.
 
 Example questions:
 
   How many completed, pruned, and failed trials are in this study?
-
-  Which trial is currently best, and what parameters did it use?
-
+  Which trial is currently best, and what lambda1 did it use?
   Compare the top five trials. Is the best trial clearly ahead?
-
-  Compare trial 13 with trial 7.
-
-  Which additional metrics were recorded for trial 13?
-
-  Which parameter has the strongest association with objective variation?
-
-  Does the current evidence show that the best parameters are robust?
-
-  Summarize what the study establishes and what evidence is still missing.
-
-  Preview the configuration that would train Phase 0 with the best trial.
-
-  Start Phase 0 training with the best Optuna parameters.
-
+  What are the four per-output relative L2 values for the best trial?
+  Preview the configuration that would train Phase 0 with the best lambda1.
+  Start Phase 0 training with the best Optuna lambda1.
   What is the status of the latest training job?
-
-  Switch to qwen3:1.7b for the rest of this conversation.
 """
 
 
@@ -1697,10 +1217,7 @@ def _parse_cli_args() -> argparse.Namespace:
     parser.add_argument(
         "--model",
         default=DEFAULT_MODEL_NAME,
-        help=(
-            "Installed tool-capable Ollama model "
-            f"(default: {DEFAULT_MODEL_NAME!r})."
-        ),
+        help=f"Installed tool-capable Ollama model (default: {DEFAULT_MODEL_NAME!r}).",
     )
     parser.add_argument(
         "--list-models",
@@ -1727,92 +1244,68 @@ def main() -> None:
     try:
         resolved_model, capabilities = check_ollama_configuration(args.model)
         print(f"Ollama model ready: {resolved_model}")
-        print(
-            "Model capabilities: "
-            + ", ".join(sorted(capabilities))
-        )
+        print("Model capabilities: " + ", ".join(sorted(capabilities)))
         check_study_configuration()
     except Exception as exc:
         print("\nStartup error:")
         print(exc)
         print(
-            "\nEdit STORAGE and STUDY_NAME at the "
-            "top of cosmo_agent.py."
+            "\nCheck config.json and agent/phase0_optuna_config.json, and make "
+            "sure the matching Phase-0 Optuna study has been created."
         )
         sys.exit(1)
 
     print(f"\nOllama context window: {NUM_CONTEXT_TOKENS} tokens")
     print(
-        "Training jobs are launched only after an explicit conversational "
-        "request and are saved below agent/training_runs/."
+        "Training jobs are launched only after an explicit conversational request "
+        "and are saved below agent/training_runs/."
     )
     print("\nType /help for commands.")
 
     agent = CosmoAgentSession()
-
     while True:
         try:
-            user_message = input(
-                "\nYou> "
-            ).strip()
+            user_message = input("\nYou> ").strip()
         except (KeyboardInterrupt, EOFError):
             print("\nExiting CosmoAgent.")
             break
 
         if not user_message:
             continue
-
         normalized = user_message.lower()
 
-        if normalized in {
-            "/exit",
-            "/quit",
-            "exit",
-            "quit",
-        }:
+        if normalized in {"/exit", "/quit", "exit", "quit"}:
             print("Exiting CosmoAgent.")
             break
-
         if normalized == "/help":
             print(HELP_TEXT)
             continue
-
         if normalized == "/reset":
             agent.reset()
-            print(
-                "Conversation history has been cleared."
-            )
+            print("Conversation history has been cleared.")
             continue
-
         if normalized == "/status":
             print(
                 f"Active model: {get_active_model_name()}\n"
-                "Stored conversation messages: "
-                f"{agent.message_count()}"
+                f"Stored conversation messages: {agent.message_count()}\n"
+                f"Study: {STUDY_NAME}"
             )
             continue
-
         if normalized == "/models":
             try:
                 print(list_ollama_models())
             except Exception as exc:
                 print(f"Unable to list Ollama models: {exc}")
             continue
-
         if normalized == "/study":
             try:
                 print(get_study_summary())
             except Exception as exc:
                 print(f"Unable to read the Optuna study: {exc}")
             continue
-
         if normalized == "/model":
-            print(
-                f"Active model: {get_active_model_name()}\n"
-                "Usage: /model MODEL_NAME"
-            )
+            print(f"Active model: {get_active_model_name()}\nUsage: /model MODEL_NAME")
             continue
-
         if normalized.startswith("/model "):
             requested_model = user_message.split(maxsplit=1)[1].strip()
             try:
@@ -1826,20 +1319,13 @@ def main() -> None:
         except ollama.ResponseError as exc:
             print("\nOllama error:")
             print(exc)
-
             if getattr(exc, "status_code", None) == 404:
-                print(
-                    f"\nMake sure the model exists:\n"
-                    f"ollama pull {get_active_model_name()}"
-                )
-
+                print(f"\nMake sure the model exists:\nollama pull {get_active_model_name()}")
             continue
         except ConnectionError as exc:
             print("\nUnable to connect to Ollama:")
             print(exc)
-            print(
-                "\nMake sure the Ollama App is running."
-            )
+            print("\nMake sure the Ollama App is running.")
             continue
         except Exception as exc:
             print("\nUnexpected Agent error:")
