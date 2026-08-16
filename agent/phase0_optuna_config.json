@@ -1,5 +1,5 @@
 {
-  "study_name": "phase0_tree_level_eps_{eps_tag}_lambda1",
+  "study_name": "phase0_tree_level_eps_{eps_tag}_lambda1_mean_output_rel_l2",
   "storage": null,
   "output_dir": "agent/phase0_optuna_results/eps_{eps_tag}",
   "device": "auto",
