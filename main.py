@@ -13,7 +13,7 @@ from lib.loss import (
     cde_residual_loss_fixed_eps_1loop,
     cde_residual_loss_fixed_eps_2loop,
 )
-from lib.models import PinnModel, TransferPinnModel
+from lib.pinn_models import PinnModel, TransferPinnModel
 from lib.train import train_model_fixed_eps
 from plot_tools.plot_error import plot_error_dis
 from plot_tools.plot_losses import (

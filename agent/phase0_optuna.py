@@ -33,7 +33,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from lib.loss import boundary_loss, cde_residual_loss_fixed_eps  # noqa: E402
-from lib.models import PinnModel  # noqa: E402
+from lib.pinn_models import PinnModel  # noqa: E402
 from two_site_chain.coll_bc import (  # noqa: E402
     build_inputs_and_boundary,
     compute_function_target_from_xcoll,

@@ -63,7 +63,8 @@ $$
   </tr>
 </table>
 
-The key idea is to approximate the vector of MIs by a neural network and train it directly against the canonical differential system. 
+The key idea is to approximate the integration family of MIs by a neural network and train it 
+directly against the canonical differential system. 
 The loss combines:
 
 - Loss of canonical differential equation (CDE) evaluated at collocation points $L_{\mathrm{CDE}}$.
@@ -156,7 +157,7 @@ Here all norms are evaluated at a single point $\vec{u}_i$ and are taken over th
 |-- main.py                         # Main configuration-driven training entry point
 |-- config.json                     # Default run configuration
 |-- lib/
-|   |-- models.py                   # PINN and transfer-PINN modules
+|   |-- pinn_models.py              # PINN and transfer-PINN modules
 |   |-- loss.py                     # CDE residual and BC losses
 |   |-- train.py                    # Optimizer, warmup, cosine schedule
 |-- two_site_chain/                 # Phase-0 analytic targets and CDE matrices

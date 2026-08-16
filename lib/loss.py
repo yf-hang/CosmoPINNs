@@ -184,7 +184,9 @@ def cde_residual_loss_fixed_eps(
 
     if not terms:
         raise RuntimeError("No residual terms computed. Check output_part and model output shape.")
-    loss = 0.5 * torch.stack(terms).sum()
+    # Average the per-coordinate CDE residuals so the loss scale is
+    # independent of the number of input variables (x1, x2, ...).
+    loss = 0.5 * torch.stack(terms).sum() / x_batch.shape[1]
     Nc = x_batch.new_tensor(float(x_batch.shape[0]))
     return loss, Nc
 
@@ -270,7 +272,9 @@ def cde_residual_loss_fixed_eps_1loop(
 
     if not terms:
         raise RuntimeError("No residual terms computed. Check output_part and model output shape.")
-    loss = 0.5 * torch.stack(terms).sum()
+    # Average the per-coordinate CDE residuals so the loss scale is
+    # independent of the number of input variables (x1, x2, ...).
+    loss = 0.5 * torch.stack(terms).sum() / x_batch.shape[1]
     Nc = x_batch.new_tensor(float(x_batch.shape[0]))
     return loss, Nc
 
@@ -375,7 +379,9 @@ def cde_residual_loss_fixed_eps_2loop(
 
     if not terms:
         raise RuntimeError("No residual terms computed. Check output_part and model output shape.")
-    loss = 0.5 * torch.stack(terms).sum()
+    # Average the per-coordinate CDE residuals so the loss scale is
+    # independent of the number of input variables (x1, x2, ...).
+    loss = 0.5 * torch.stack(terms).sum() / x_batch.shape[1]
     Nc = x_batch.new_tensor(float(x_batch.shape[0]))
     return loss, Nc
 
