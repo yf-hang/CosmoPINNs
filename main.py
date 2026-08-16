@@ -97,17 +97,15 @@ def _to_bool(value, default=True):
     return bool(value)
 
 
-def _normalize_output_part(value, default="both"):
+def _normalize_output_part(value, default="re"):
     if value is None:
         value = default
     s = str(value).strip().lower()
-    if s in {"both", "all", "reim", "complex"}:
-        return "both"
     if s in {"re", "real"}:
         return "re"
     if s in {"im", "imag", "imaginary"}:
         return "im"
-    raise ValueError(f"Unsupported output part: {value!r}. Expected one of Re/Im/Both.")
+    raise ValueError(f"Unsupported output part: {value!r}. Expected one of Re or Im.")
 
 
 def _output_part_tag(output_part: str):
@@ -116,7 +114,7 @@ def _output_part_tag(output_part: str):
         return "Re"
     if part == "im":
         return "Im"
-    return None
+    raise ValueError(f"Unsupported output part: {output_part!r}. Expected Re or Im.")
 
 
 def _slice_phase0_target_by_part(
@@ -132,14 +130,6 @@ def _slice_phase0_target_by_part(
     part = _normalize_output_part(output_part)
     dim = int(tensor.shape[1])
     nb = int(n_basis)
-
-    if part == "both":
-        expected = 2 * nb
-        if dim != expected:
-            raise ValueError(
-                f"{tensor_name} expects dim={expected} for output_part='both', got shape {tuple(tensor.shape)}"
-            )
-        return tensor
 
     if dim == nb:
         return tensor
@@ -640,15 +630,15 @@ def main():
     y1_max_2loop = float(getattr(cfg, "y1_max_2loop", getattr(cfg, "y1_max_1loop", 1.0)))
     y2_min_2loop = float(getattr(cfg, "y2_min_2loop", y1_min_2loop))
     y2_max_2loop = float(getattr(cfg, "y2_max_2loop", y1_max_2loop))
-    p0_output_part = _normalize_output_part(getattr(cfg, "phase0_output_part", "both"))
+    p0_output_part = _normalize_output_part(getattr(cfg, "phase0_output_part", "re"))
     p0_output_part_tag = _output_part_tag(p0_output_part)
-    p0_output_part_label = "Both" if p0_output_part == "both" else ("Re" if p0_output_part == "re" else "Im")
-    p1_output_part = _normalize_output_part(getattr(cfg, "phase1_output_part", "both"))
+    p0_output_part_label = "Re" if p0_output_part == "re" else "Im"
+    p1_output_part = _normalize_output_part(getattr(cfg, "phase1_output_part", "re"))
     p1_output_part_tag = _output_part_tag(p1_output_part)
-    p1_output_part_label = "Both" if p1_output_part == "both" else ("Re" if p1_output_part == "re" else "Im")
-    p2_output_part = _normalize_output_part(getattr(cfg, "phase2_output_part", "both"))
+    p1_output_part_label = "Re" if p1_output_part == "re" else "Im"
+    p2_output_part = _normalize_output_part(getattr(cfg, "phase2_output_part", "re"))
     p2_output_part_tag = _output_part_tag(p2_output_part)
-    p2_output_part_label = "Both" if p2_output_part == "both" else ("Re" if p2_output_part == "re" else "Im")
+    p2_output_part_label = "Re" if p2_output_part == "re" else "Im"
     p0_phase_tag = "P0"
     p1_phase_tag = "P1_gnclip" if use_clip_gn_phase1 else "P1"
     p2_phase_tag = "P2_gnclip" if use_clip_gn_phase2 else "P2"
@@ -1303,22 +1293,9 @@ def main():
             output_part=p0_output_part,
         )
 
-        if p0_output_part == "both":
-            plot_error_dis(
-                model=model_base,
-                x_coll=x_coll,
-                function_target=f_target,
-                phase_name="P0",
-                eps_value=None if p0_uses_eps_input else cfg.eps_global,
-                cy=cfg.cy,
-                pred_scale=p0_solution_scale,
-                plot_vector_l2_hist=plot_vector_l2_hist,
-                phase_tag=p0_phase_tag,
-            )
-        else:
-            msg = f"[P0] output_part={p0_output_part_label}: skip plot_error_dis."
-            print(msg)
-            p0_log(msg)
+        msg = f"[P0] output_part={p0_output_part_label}: skip plot_error_dis."
+        print(msg)
+        p0_log(msg)
     elif run_transfer_only:
         transfer_phase_name = "phase1_only" if run_phase1_only else "phase2_only"
         msg = f"[P0] {transfer_phase_name}=True: skip P0 training/plots/checks."
@@ -1670,22 +1647,9 @@ def main():
                 output_part=p1_output_part,
             )
     
-            if p1_output_part == "both":
-                plot_error_dis(
-                    model=model_p1,
-                    x_coll=x_coll_1loop,
-                    function_target=f_target_1loop,
-                    phase_name="P1",
-                    eps_value=cfg.eps_global,
-                    cy_loop=cfg.cy_1loop,
-                    pred_scale=p1_solution_scale,
-                    plot_vector_l2_hist=plot_vector_l2_hist,
-                    phase_tag=p1_phase_tag,
-                )
-            else:
-                msg = f"[P1] output_part={p1_output_part_label}: skip plot_error_dis."
-                print(msg)
-                p1_log(msg)
+            msg = f"[P1] output_part={p1_output_part_label}: skip plot_error_dis."
+            print(msg)
+            p1_log(msg)
         else:
             msg = "[P1] train_two_phase_only=True: skip plot_losses/post_train_check/plot_error."
             print(msg)
@@ -2127,22 +2091,9 @@ def main():
                 output_part=p2_output_part,
             )
 
-            if p2_output_part == "both":
-                plot_error_dis(
-                    model=model_p2,
-                    x_coll=x_coll_2loop,
-                    function_target=f_target_2loop,
-                    phase_name="P2",
-                    eps_value=cfg.eps_global,
-                    cy_loop=cy_2loop,
-                    pred_scale=p2_solution_scale,
-                    plot_vector_l2_hist=plot_vector_l2_hist,
-                    phase_tag=p2_phase_tag,
-                )
-            else:
-                msg = f"[P2] output_part={p2_output_part_label}: skip plot_error_dis."
-                print(msg)
-                p2_log(msg)
+            msg = f"[P2] output_part={p2_output_part_label}: skip plot_error_dis."
+            print(msg)
+            p2_log(msg)
         else:
             msg = "[P2] train_two_phase_only=True: skip plot_losses/post_train_check/plot_error."
             print(msg)

@@ -13,22 +13,20 @@ def post_train_check(
     phase_name="P0",
     pred_scale=1.0,
     log_fn=None,
-    output_part="both",
+    output_part="re",
 ):
     """
     Post-train diagnostics for fixed-eps single-model training.
     """
-    def _normalize_output_part(value, default="both"):
+    def _normalize_output_part(value, default="re"):
         if value is None:
             value = default
         s = str(value).strip().lower()
-        if s in {"both", "all", "reim", "complex"}:
-            return "both"
         if s in {"re", "real"}:
             return "re"
         if s in {"im", "imag", "imaginary"}:
             return "im"
-        raise ValueError(f"Unsupported output part: {value!r}. Expected one of Re/Im/Both.")
+        raise ValueError(f"Unsupported output part: {value!r}. Expected one of Re or Im.")
 
     def _emit(msg: str):
         print(msg)

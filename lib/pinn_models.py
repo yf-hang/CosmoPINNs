@@ -3,17 +3,15 @@ import torch
 import torch.nn as nn
 
 
-def _normalize_output_part(value, default="both"):
+def _normalize_output_part(value, default="re"):
     if value is None:
         value = default
     s = str(value).strip().lower()
-    if s in {"both", "all", "reim", "complex"}:
-        return "both"
     if s in {"re", "real"}:
         return "re"
     if s in {"im", "imag", "imaginary"}:
         return "im"
-    raise ValueError(f"Unsupported output part: {value!r}. Expected one of Re/Im/Both.")
+    raise ValueError(f"Unsupported output part: {value!r}. Expected one of Re or Im.")
 
 
 class PinnModel(nn.Module):
@@ -25,7 +23,7 @@ class PinnModel(nn.Module):
         n_basis = config.n_basis
         activation_name = config.activation_f
         if output_part is None:
-            output_part = getattr(config, "phase0_output_part", "both")
+            output_part = getattr(config, "phase0_output_part", "re")
         output_part = _normalize_output_part(output_part)
 
         activation = self.get_activation(activation_name)
@@ -34,7 +32,7 @@ class PinnModel(nn.Module):
         for _ in range(n_hidden - 1):
             layers.append(nn.Linear(hidden_size, hidden_size))
             layers.append(activation)
-        out_dim = (2 * n_basis) if output_part == "both" else n_basis
+        out_dim = n_basis
         layers.append(nn.Linear(hidden_size, out_dim))
 
         self.net = nn.Sequential(*layers)
@@ -101,7 +99,7 @@ class TransferPinnModel(nn.Module):
                 p.requires_grad = False
 
         if output_part is None:
-            output_part = getattr(config, "phase1_output_part", "both")
+            output_part = getattr(config, "phase1_output_part", "re")
         output_part = _normalize_output_part(output_part)
 
         if target_n_basis is None:
@@ -110,7 +108,7 @@ class TransferPinnModel(nn.Module):
         if target_n_basis <= 0:
             raise ValueError(f"target_n_basis must be positive, got {target_n_basis}.")
 
-        out_dim = (2 * target_n_basis) if output_part == "both" else target_n_basis
+        out_dim = target_n_basis
         self.output_layer = nn.Linear(hidden, out_dim)
         self.output_part = output_part
         self.out_dim = int(out_dim)

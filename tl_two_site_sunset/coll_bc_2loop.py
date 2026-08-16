@@ -64,23 +64,19 @@ _ANALYTIC_FUNCS = (
 _EPS_TOL = 1e-12
 
 
-def _normalize_output_part(value, default="both"):
+def _normalize_output_part(value, default="re"):
     if value is None:
         value = default
     s = str(value).strip().lower()
-    if s in {"both", "all", "reim", "complex"}:
-        return "both"
     if s in {"re", "real"}:
         return "re"
     if s in {"im", "imag", "imaginary"}:
         return "im"
-    raise ValueError(f"Unsupported output part: {value!r}. Expected one of Re/Im/Both.")
+    raise ValueError(f"Unsupported output part: {value!r}. Expected one of Re or Im.")
 
 
-def _complex_to_output_channels(function_complex: np.ndarray, output_part="both") -> np.ndarray:
+def _complex_to_output_channels(function_complex: np.ndarray, output_part="re") -> np.ndarray:
     part = _normalize_output_part(output_part)
-    if part == "both":
-        return np.concatenate([np.real(function_complex), np.imag(function_complex)], axis=1)
     if part == "re":
         return np.real(function_complex)
     return np.imag(function_complex)
@@ -497,7 +493,7 @@ def compute_function_target_from_xcoll_2loop(
     *,
     cy_val: float,
     eps_val: float,
-    output_part="both",
+    output_part="re",
     num_workers=1,
     chunk_size=2000,
     parallel_min_points=5000,
@@ -683,7 +679,7 @@ def build_inputs_and_boundary_2loop(
     eps_val,
     device,
     compute_function_target=False,
-    output_part="both",
+    output_part="re",
     target_total_bc=500,
     n_bc_edge=6,
     n_face_pts=40,

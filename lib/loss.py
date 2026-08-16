@@ -4,31 +4,21 @@ import torch.nn as nn
 # -------------------------------------------------
 #  Compute gradients for complex outputs
 # -------------------------------------------------
-def _normalize_output_part(value, default="both"):
+def _normalize_output_part(value, default="re"):
     if value is None:
         value = default
     s = str(value).strip().lower()
-    if s in {"both", "all", "reim", "complex"}:
-        return "both"
     if s in {"re", "real"}:
         return "re"
     if s in {"im", "imag", "imaginary"}:
         return "im"
-    raise ValueError(f"Unsupported output part: {value!r}. Expected one of Re/Im/Both.")
+    raise ValueError(f"Unsupported output part: {value!r}. Expected one of Re or Im.")
 
 
-def _split_model_outputs(outputs: torch.Tensor, n_basis: int, output_part="both"):
+def _split_model_outputs(outputs: torch.Tensor, n_basis: int, output_part="re"):
     part = _normalize_output_part(output_part)
     if outputs.ndim != 2:
         raise ValueError(f"model outputs must be 2D, got shape {tuple(outputs.shape)}")
-
-    if part == "both":
-        expected = int(2 * n_basis)
-        if outputs.shape[1] != expected:
-            raise ValueError(
-                f"Expected model output dim={expected} for output_part='both', got {tuple(outputs.shape)}"
-            )
-        return outputs[:, :n_basis], outputs[:, n_basis:]
 
     expected = int(n_basis)
     if outputs.shape[1] != expected:
@@ -54,7 +44,7 @@ def _compute_gradients_complex_coords(
     x_input: torch.Tensor,
     n_basis: int,
     n_coords: int,
-    output_part="both",
+    output_part="re",
 ):
     x_req = x_input.clone().detach().requires_grad_(True)
 
@@ -67,36 +57,42 @@ def _compute_gradients_complex_coords(
     return re_out, im_out, grads_re, grads_im
 
 
-def compute_gradients_complex(model: nn.Module, x_input: torch.Tensor, n_basis: int):
+def compute_gradients_complex(
+    model: nn.Module, x_input: torch.Tensor, n_basis: int, output_part="re"
+):
     re_out, im_out, grads_re, grads_im = _compute_gradients_complex_coords(
         model=model,
         x_input=x_input,
         n_basis=n_basis,
         n_coords=2,
+        output_part=output_part,
     )
 
-    d_re_dx1 = grads_re[:, 0, :]
-    d_re_dx2 = grads_re[:, 1, :]
-    d_im_dx1 = grads_im[:, 0, :]
-    d_im_dx2 = grads_im[:, 1, :]
+    d_re_dx1 = grads_re[:, 0, :] if grads_re is not None else None
+    d_re_dx2 = grads_re[:, 1, :] if grads_re is not None else None
+    d_im_dx1 = grads_im[:, 0, :] if grads_im is not None else None
+    d_im_dx2 = grads_im[:, 1, :] if grads_im is not None else None
 
     return re_out, im_out, d_re_dx1, d_re_dx2, d_im_dx1, d_im_dx2
 
 
-def compute_gradients_complex_1loop(model: nn.Module, x_input: torch.Tensor, n_basis: int):
+def compute_gradients_complex_1loop(
+    model: nn.Module, x_input: torch.Tensor, n_basis: int, output_part="re"
+):
     re_out, im_out, grads_re, grads_im = _compute_gradients_complex_coords(
         model=model,
         x_input=x_input,
         n_basis=n_basis,
         n_coords=3,
+        output_part=output_part,
     )
 
-    d_re_dx1 = grads_re[:, 0, :]
-    d_re_dx2 = grads_re[:, 1, :]
-    d_re_dy1 = grads_re[:, 2, :]
-    d_im_dx1 = grads_im[:, 0, :]
-    d_im_dx2 = grads_im[:, 1, :]
-    d_im_dy1 = grads_im[:, 2, :]
+    d_re_dx1 = grads_re[:, 0, :] if grads_re is not None else None
+    d_re_dx2 = grads_re[:, 1, :] if grads_re is not None else None
+    d_re_dy1 = grads_re[:, 2, :] if grads_re is not None else None
+    d_im_dx1 = grads_im[:, 0, :] if grads_im is not None else None
+    d_im_dx2 = grads_im[:, 1, :] if grads_im is not None else None
+    d_im_dy1 = grads_im[:, 2, :] if grads_im is not None else None
 
     return re_out, im_out, d_re_dx1, d_re_dx2, d_re_dy1, d_im_dx1, d_im_dx2, d_im_dy1
 
@@ -122,7 +118,7 @@ def cde_residual_loss_fixed_eps(
     n_basis,
     eps_val,
     eps0_tol=1e-12,
-    output_part="both",
+    output_part="re",
 ):
     """
     CDE loss for fixed-eps training.
@@ -198,7 +194,7 @@ def cde_residual_loss_fixed_eps_1loop(
     n_basis,
     eps_val,
     eps0_tol=1e-12,
-    output_part="both",
+    output_part="re",
 ):
     """
     CDE loss for fixed-eps 1-loop training.
@@ -286,7 +282,7 @@ def cde_residual_loss_fixed_eps_2loop(
     n_basis,
     eps_val,
     eps0_tol=1e-12,
-    output_part="both",
+    output_part="re",
 ):
     """
     CDE loss for fixed-eps 2-loop sunset training.
@@ -393,12 +389,11 @@ def _build_bc_channel_scale(
     *,
     scale_floor: float = 1e-4,
     min_scale_ratio: float = 1.0,
-    output_part="both",
+    output_part="re",
 ):
     """
     Build stable per-channel normalization scale for BC loss.
-    For complex concatenated targets [Re..., Im...], Im-channel scale is
-    lower-bounded by the corresponding Re-channel scale.
+    Build a per-output-channel scale for the selected Re or Im target.
     """
     if bc_target.ndim != 2:
         raise ValueError(f"bc_target must be 2D, got shape {tuple(bc_target.shape)}")
@@ -408,14 +403,6 @@ def _build_bc_channel_scale(
 
     output_part = _normalize_output_part(output_part)
     d = int(ch_rms.shape[0])
-    if (output_part == "both") and (d % 2 == 0) and d > 0:
-        n_basis = d // 2
-        re_rms = ch_rms[:n_basis]
-        im_rms = ch_rms[n_basis:]
-        # In many fixed-eps settings Im targets can be near-zero; avoid over-weighting.
-        im_rms = torch.maximum(im_rms, re_rms)
-        ch_rms = torch.cat([re_rms, im_rms], dim=0)
-
     min_scale = torch.clamp(
         global_rms * float(min_scale_ratio),
         min=float(scale_floor),
@@ -433,7 +420,7 @@ def boundary_loss(
     scale_floor=1e-4,
     min_scale_ratio=1.0,
     abs_mse_weight=0.05,
-    output_part="both",
+    output_part="re",
 ):
     pred = model(x_b_tensor)
     diff = pred - bc_target

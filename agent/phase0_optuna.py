@@ -85,14 +85,12 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
 
 
 def _normalise_output_part(value: Any) -> str:
-    text = str(value if value is not None else "both").strip().lower()
-    if text in {"both", "all", "reim", "complex"}:
-        return "both"
+    text = str(value if value is not None else "re").strip().lower()
     if text in {"re", "real"}:
         return "re"
     if text in {"im", "imag", "imaginary"}:
         return "im"
-    raise ValueError(f"Unsupported phase0 output part: {value!r}")
+    raise ValueError(f"Unsupported phase0 output part: {value!r}; expected Re or Im")
 
 
 def _eps_tag(value: Any) -> str:
@@ -263,7 +261,7 @@ class Phase0Objective:
         self.data = data
         self.device = device
         self.output_dir = output_dir
-        self.output_part = _normalise_output_part(base.get("phase0_output_part", "both"))
+        self.output_part = _normalise_output_part(base.get("phase0_output_part", "re"))
         self.matrix_module = _build_matrix_module(device, float(base["cy"]))
         self.incumbent_score = incumbent_score
 
@@ -486,7 +484,7 @@ def main() -> None:
     format_values = {
         "eps": float(base["eps_global"]),
         "eps_tag": _eps_tag(base["eps_global"]),
-        "output_part": _normalise_output_part(base.get("phase0_output_part", "both")),
+        "output_part": _normalise_output_part(base.get("phase0_output_part", "re")),
     }
     tune["study_name"] = str(tune["study_name"]).format(**format_values)
     output_dir_text = str(tune.get("output_dir", "agent/phase0_optuna_results")).format(
@@ -500,7 +498,7 @@ def main() -> None:
         storage = f"sqlite:///{(output_dir / 'study.sqlite3').as_posix()}"
 
     device = _resolve_device(str(tune.get("device", base.get("device", "auto"))))
-    output_part = _normalise_output_part(base.get("phase0_output_part", "both"))
+    output_part = _normalise_output_part(base.get("phase0_output_part", "re"))
     print(f"Phase mapping: {PHASE_MAP}")
     print(f"Preparing fixed Phase 0 data on {device} (output_part={output_part})...")
     data = _build_phase0_data(base, tune, device, output_part)

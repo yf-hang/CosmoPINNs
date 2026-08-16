@@ -864,7 +864,7 @@ def _validate_study_compatibility(
 
     expected = {
         "eps_global": float(config["eps_global"]),
-        "output_part": str(config.get("phase0_output_part", "both")).strip().lower(),
+        "output_part": str(config.get("phase0_output_part", "re")).strip().lower(),
         "domain": [
             float(config["x1_min"]),
             float(config["x1_max"]),

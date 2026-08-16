@@ -190,7 +190,7 @@ Important configuration fields:
 | `eps_global` | fixed $\varepsilon$ value for the run |
 | `enable_phase1`, `enable_phase2` | select the transfer target; only one can run in a single execution |
 | `run_phase1_only`, `run_phase2_only` | skip Phase-1 training and load an existing Phase-1 checkpoint |
-| `phase*_output_part` | `Re`, `Im`, or `Both`; manuscript runs use real-sector training |
+| `phase*_output_part` | `Re` or `Im`; real and imaginary sectors are trained separately |
 | `lambda1`, `lambda2` | CDE and boundary loss weights |
 | `phase*_model_load_path` | explicit checkpoint path for transfer or evaluation |
 
