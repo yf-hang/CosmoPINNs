@@ -1,7 +1,7 @@
 {
-  "study_name": "phase0_tree_level_eps_{eps_tag}_lambda1_mean_output_rel_l2",
+  "study_name": "phase0_tree_level_eps_{eps_tag}_lambda1_mean_output_rel_l2_noscale_raw_bc",
   "storage": null,
-  "output_dir": "agent/phase0_optuna_results/eps_{eps_tag}",
+  "output_dir": "agent/phase0_optuna_results/eps_{eps_tag}/noscale_raw_bc",
   "device": "auto",
 
   "n_trials": 30,
