@@ -1,0 +1,28 @@
+{
+  "output_dir": "testWeight/results/eps_{eps_tag}/adaptive_lambda1",
+  "device": "auto",
+
+  "train_data_seed": 0,
+  "validation_seed": 2026,
+  "model_seed": 1234,
+
+  "n_coll": 10000,
+  "n_boundary": 1000,
+  "n_bc_edge": 80,
+  "n_corner_each": 80,
+  "n_validation": 2000,
+  "validation_workers": 1,
+  "validation_chunk_size": 2000,
+  "validation_parallel_min_points": 5000,
+
+  "epochs": 2000,
+  "warmup_epochs": 200,
+  "eval_every": 100,
+  "cosine_min_lr": 1e-8,
+
+  "lambda_bc_initial": 1.0,
+  "adaptive_alpha": 0.9,
+  "adaptive_every": 10,
+
+  "save_best_checkpoint": true
+}
