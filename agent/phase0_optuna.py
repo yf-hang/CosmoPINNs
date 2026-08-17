@@ -136,7 +136,8 @@ def _resolve_device(requested: str) -> torch.device:
 
 
 def _solution_scale(base: dict[str, Any], boundary_target: torch.Tensor) -> float:
-    if not _as_bool(base.get("normalized_bc"), True):
+    """Return one global target scale, independently of BC loss normalization."""
+    if not _as_bool(base.get("use_solution_scale"), False):
         return 1.0
 
     mode = str(base.get("solution_scale_mode", "auto")).strip().lower()
@@ -239,9 +240,6 @@ def _validation_metrics(
                     f"{tuple(prediction.shape)} vs {tuple(target_scaled.shape)}"
                 )
 
-            # dim=0 means that each output component is evaluated over all
-            # validation points independently:
-            #   E_j = ||prediction_j - target_j||_2 / ||target_j||_2.
             difference_norm = torch.linalg.vector_norm(prediction - target_scaled, dim=0)
             target_norm = torch.linalg.vector_norm(target_scaled, dim=0)
 
@@ -292,17 +290,16 @@ class Phase0Objective:
         self.incumbent_score = incumbent_score
         self.learning_rate = float(base["learning_rate_p0"])
         self.lambda2 = float(base.get("lambda2", 1.0))
+        self.use_bc_channel_normalization = _as_bool(
+            base.get("use_bc_channel_normalization"), False
+        )
 
     def _boundary_loss(self, model: torch.nn.Module) -> torch.Tensor:
-        use_normalized = _as_bool(
-            self.base.get("bc_loss_use_normalized"),
-            _as_bool(self.base.get("normalized_bc"), True),
-        )
         return boundary_loss(
             model,
             self.data.x_boundary,
             self.data.boundary_target_scaled,
-            use_normalized=use_normalized,
+            use_normalized=self.use_bc_channel_normalization,
             scale_floor=float(self.base.get("bc_loss_scale_floor", 1e-4)),
             min_scale_ratio=float(self.base.get("bc_loss_min_scale_ratio", 1.0)),
             abs_mse_weight=float(self.base.get("bc_loss_abs_mse_weight", 0.05)),
@@ -317,8 +314,6 @@ class Phase0Objective:
             log=True,
         )
 
-        # Keeping the same initialisation for every trial makes comparisons
-        # reflect lambda1 rather than a lucky random seed.
         _seed_everything(int(self.tune["model_seed"]))
         config = SimpleNamespace(**self.base)
         model = PinnModel(config, in_dim=2, output_part=self.output_part).to(self.device)
@@ -337,8 +332,6 @@ class Phase0Objective:
 
         try:
             for epoch in range(1, epochs + 1):
-                # Set the warmup learning rate BEFORE this epoch's optimizer
-                # step. This avoids epoch 1 accidentally using the full LR.
                 if warmup_epochs > 0 and epoch <= warmup_epochs:
                     warmup_scale = epoch / float(warmup_epochs)
                     for parameter_group in optimizer.param_groups:
@@ -361,7 +354,6 @@ class Phase0Objective:
                 total_loss.backward()
                 optimizer.step()
 
-                # Start cosine decay only after the warmup phase is complete.
                 if epoch > warmup_epochs:
                     scheduler.step()
 
@@ -389,6 +381,9 @@ class Phase0Objective:
             trial.set_user_attr("bc_weight", self.lambda2)
             trial.set_user_attr("cde_weight", lambda1)
             trial.set_user_attr("solution_scale", self.data.solution_scale)
+            trial.set_user_attr(
+                "use_bc_channel_normalization", self.use_bc_channel_normalization
+            )
 
             score = float(last_losses["score"])
             if _as_bool(self.tune.get("save_best_checkpoint"), True) and score < self.incumbent_score:
@@ -396,8 +391,6 @@ class Phase0Objective:
                 checkpoint = {
                     "phase": 0,
                     "phase_name": PHASE_MAP[0],
-                    # Use main.py's checkpoint key so this file can be loaded
-                    # through phase0_model_load_path if desired.
                     "model_state_dict": model.state_dict(),
                     "input_dim": 2,
                     "n_basis": int(self.base["n_basis"]),
@@ -408,6 +401,10 @@ class Phase0Objective:
                     "lambda2": self.lambda2,
                     "cde_weight": lambda1,
                     "bc_weight": self.lambda2,
+                    "use_solution_scale": _as_bool(
+                        self.base.get("use_solution_scale"), False
+                    ),
+                    "use_bc_channel_normalization": self.use_bc_channel_normalization,
                     "validation_metrics": last_losses,
                     "trial_number": int(trial.number),
                 }
@@ -533,8 +530,17 @@ def main() -> None:
 
     device = _resolve_device(str(tune.get("device", base.get("device", "auto"))))
     output_part = _normalise_output_part(base.get("phase0_output_part", "re"))
+    use_solution_scale = _as_bool(base.get("use_solution_scale"), False)
+    use_bc_channel_normalization = _as_bool(
+        base.get("use_bc_channel_normalization"), False
+    )
     print(f"Phase mapping: {PHASE_MAP}")
     print(f"Preparing fixed Phase 0 data on {device} (output_part={output_part})...")
+    print(
+        "Normalization switches: "
+        f"use_solution_scale={use_solution_scale}, "
+        f"use_bc_channel_normalization={use_bc_channel_normalization}"
+    )
     data = _build_phase0_data(base, tune, device, output_part)
     print(
         f"Data ready: coll={len(data.x_coll)}, boundary={len(data.x_boundary)}, "
@@ -568,6 +574,8 @@ def main() -> None:
         "n_hidden_layers": int(base["n_hidden_layers"]),
         "learning_rate_p0": float(base["learning_rate_p0"]),
         "lambda2": float(base.get("lambda2", 1.0)),
+        "use_solution_scale": use_solution_scale,
+        "use_bc_channel_normalization": use_bc_channel_normalization,
         "n_coll": int(tune["n_coll"]),
         "n_boundary": int(tune["n_boundary"]),
         "n_validation": int(tune["n_validation"]),
@@ -623,6 +631,8 @@ def main() -> None:
             "lambda2": float(base.get("lambda2", 1.0)),
         },
         "best_metrics": dict(best.user_attrs),
+        "use_solution_scale": use_solution_scale,
+        "use_bc_channel_normalization": use_bc_channel_normalization,
         "solution_scale": data.solution_scale,
         "base_config": str(args.base_config.resolve()),
         "tune_config": str(args.tune_config.resolve()),
