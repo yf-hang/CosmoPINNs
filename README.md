@@ -154,7 +154,8 @@ Here all norms are evaluated at a single point $\vec{u}_i$ and are taken over th
 ## Repository Layout
 
 ```text
-|-- main.py                         # Main configuration-driven training entry point
+|-- main.py                         # Configuration-driven training entry point
+|-- main_core.py                    # Core Phase-0/1/2 training implementation
 |-- config.json                     # Default run configuration
 |-- lib/
 |   |-- pinn_models.py              # PINN and transfer-PINN models
@@ -197,7 +198,14 @@ Important configuration fields:
 | `run_phase1_only`, `run_phase2_only` | skip Phase-1 training and load an existing Phase-1 checkpoint |
 | `phase*_output_part` | `Re` or `Im`; real and imaginary sectors are trained separately |
 | `lambda1`, `lambda2` | CDE and boundary loss weights |
+| `use_solution_scale` | enable/disable one global solution scale applied to all output channels |
+| `use_bc_channel_normalization` | enable/disable per-output-channel normalization inside the BC loss |
 | `phase*_model_load_path` | explicit checkpoint path for transfer or evaluation |
+
+`use_solution_scale` and `use_bc_channel_normalization` are independent switches.
+With the current default configuration both are `false`: targets are not globally
+rescaled (`solution_scale = 1`), and the BC loss is the absolute mean-squared
+error without per-channel normalization.
 
 If `use_local_config` is set to `true` in `config.json`, `main.py` loads
 `config_local_test.json` instead.
@@ -246,6 +254,16 @@ Optuna searches only $\lambda_1$. The Phase-0 learning rate
 `learning_rate_p0` and $\lambda_2$ remain fixed by the root `config.json`.
 The search range, trial count, validation sampling, and pruning settings are
 configured in `agent/phase0_optuna_config.json`.
+
+The tuner reads the same two independent switches from `config.json`:
+
+- `use_solution_scale=false` keeps the global solution scale equal to 1;
+- `use_bc_channel_normalization=false` makes $L_{\mathrm{BC}}$ the absolute MSE.
+
+The current Optuna study name/output directory contains `noscale_raw_bc` so
+trials produced with the previous normalization definition are not mixed with
+this raw-BC search. Changing either normalization switch changes the training
+problem and therefore requires a separate study.
 
 ### Validation objective
 
