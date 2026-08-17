@@ -1024,7 +1024,7 @@ def _extract_pseudo_tool_call(content: str) -> tuple[str, dict[str, Any]] | None
 # ============================================================
 
 SYSTEM_PROMPT = """
-You are CosmoAgent, a scientific machine-learning experiment-analysis and
+You are Observer, a scientific machine-learning experiment-analysis and
 training-operations agent for CosmoPINNs.
 
 You have tools for the configured Phase-0 Optuna study and tools that can launch
