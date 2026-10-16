@@ -14,6 +14,10 @@ from lib.loss import (
     cde_residual_loss_fixed_eps_2loop,
 )
 from lib.pinn_models import PinnModel, TransferPinnModel
+from lib.basis_order import (
+    BASIS_ORDER, needs_basis_migration, migrate_legacy_model_state,
+    permute_legacy_channels,
+)
 from lib.train import train_model_fixed_eps
 from plot_tools.plot_error import plot_error_dis
 from plot_tools.plot_losses import (
@@ -364,7 +368,7 @@ def _torch_load_compat(path, *, map_location):
             return torch.load(path, map_location=map_location, weights_only=False)
 
 
-def _load_model_checkpoint(model: torch.nn.Module, ckpt_path: str, device: torch.device):
+def _load_model_checkpoint(model: torch.nn.Module, ckpt_path: str, device: torch.device, *, phase: int):
     ckpt = _torch_load_compat(ckpt_path, map_location=device)
     if isinstance(ckpt, dict) and "model_state_dict" in ckpt:
         state_dict = ckpt["model_state_dict"]
@@ -374,8 +378,11 @@ def _load_model_checkpoint(model: torch.nn.Module, ckpt_path: str, device: torch
         meta = {}
     else:
         raise ValueError(f"Unsupported checkpoint format at: {ckpt_path}")
+    if needs_basis_migration(meta, phase=phase):
+        state_dict = migrate_legacy_model_state(state_dict, phase=phase)
+        print(f"[loaded] P{phase} checkpoint output reordered to S0=empty.")
     model.load_state_dict(state_dict)
-    return meta
+    return dict(meta, model_state_dict=state_dict, basis_order=BASIS_ORDER)
 
 
 def _infer_phase0_in_dim_from_checkpoint(ckpt_path: str):
@@ -413,7 +420,7 @@ def _load_loss_history(history_path: str):
         return arr["total"].tolist(), arr["cde"].tolist(), arr["bc"].tolist()
 
 
-def _load_eval_bundle(bundle_path: str, device: torch.device):
+def _load_eval_bundle(bundle_path: str, device: torch.device, *, phase: int):
     obj = _torch_load_compat(bundle_path, map_location="cpu")
     if not isinstance(obj, dict):
         raise ValueError(f"Unsupported eval-bundle format at: {bundle_path}")
@@ -425,6 +432,10 @@ def _load_eval_bundle(bundle_path: str, device: torch.device):
     x_b_tensor = obj["x_b_tensor"].to(device=device, dtype=torch.float32)
     bc_target = obj["bc_target"].to(device=device, dtype=torch.float32)
     meta = {k: v for k, v in obj.items() if k not in {"x_coll", "x_b_tensor", "bc_target"}}
+    if needs_basis_migration(meta, phase=phase):
+        bc_target = permute_legacy_channels(bc_target, phase=phase)
+        print(f"[loaded] P{phase} eval-bundle targets reordered to S0=empty.")
+    meta["basis_order"] = BASIS_ORDER
     return x_coll, x_b_tensor, bc_target, meta
 
 
@@ -459,6 +470,7 @@ def _save_phase_artifacts(
     }
     if isinstance(extra_meta, dict):
         ckpt.update(extra_meta)
+    ckpt["basis_order"] = BASIS_ORDER
     torch.save(ckpt, paths["model_abs"])
     np.savez(
         paths["history_abs"],
@@ -501,6 +513,7 @@ def _save_eval_bundle(
     }
     if isinstance(extra_meta, dict):
         payload.update(extra_meta)
+    payload["basis_order"] = BASIS_ORDER
     torch.save(payload, paths["bundle_abs"])
     return paths
 
@@ -970,7 +983,7 @@ def main():
         model_base = PinnModel(cfg, in_dim=p0_in_dim, output_part=p0_output_part).to(device)
     else:
         if p0_eval_bundle_load_path is not None:
-            x_coll, x_b_tensor, bc_target, p0_bundle_meta = _load_eval_bundle(p0_eval_bundle_load_path, device)
+            x_coll, x_b_tensor, bc_target, p0_bundle_meta = _load_eval_bundle(p0_eval_bundle_load_path, device, phase=0)
             print(f"[loaded] P0 eval-bundle from [{p0_eval_bundle_load_path}]")
             b_part_norm = _normalize_output_part(
                 p0_bundle_meta.get("output_part", p0_output_part),
@@ -1105,7 +1118,7 @@ def main():
         p0_load_header = "------ Phase 0: Load 2-Site Chain checkpoint ------"
         print(f"\n{p0_load_header}")
         p0_log(p0_load_header)
-        p0_meta = _load_model_checkpoint(model_base, p0_model_load_path, device)
+        p0_meta = _load_model_checkpoint(model_base, p0_model_load_path, device, phase=0)
         if isinstance(p0_meta, dict) and ("output_part" in p0_meta):
             ckpt_part = _normalize_output_part(p0_meta["output_part"])
             if ckpt_part != p0_output_part:
@@ -1335,6 +1348,7 @@ def main():
             x_coll_1loop, x_b_tensor_1loop, bc_target_1loop, p1_bundle_meta = _load_eval_bundle(
                 p1_eval_bundle_load_path,
                 device,
+                phase=1,
             )
             print(f"[loaded] P1 eval-bundle from [{p1_eval_bundle_load_path}]")
             b_part_norm = _normalize_output_part(
@@ -1481,7 +1495,7 @@ def main():
         p1_train_info = {}
         if p1_model_load_path is not None:
             print("\n------ Phase 1: Load 1-loop checkpoint ------")
-            p1_meta = _load_model_checkpoint(model_p1, p1_model_load_path, device)
+            p1_meta = _load_model_checkpoint(model_p1, p1_model_load_path, device, phase=1)
             if isinstance(p1_meta, dict) and ("output_part" in p1_meta):
                 ckpt_part = _normalize_output_part(p1_meta["output_part"])
                 if ckpt_part != p1_output_part:
@@ -1686,6 +1700,7 @@ def main():
             x_coll_2loop, x_b_tensor_2loop, bc_target_2loop, p2_bundle_meta = _load_eval_bundle(
                 p2_eval_bundle_load_path,
                 device,
+                phase=2,
             )
             print(f"[loaded] P2 eval-bundle from [{p2_eval_bundle_load_path}]")
             b_part_norm = _normalize_output_part(
@@ -1915,7 +1930,7 @@ def main():
         p2_train_info = {}
         if p2_model_load_path is not None:
             print("\n------ Phase 2: Load 2-loop checkpoint ------")
-            p2_meta = _load_model_checkpoint(model_p2, p2_model_load_path, device)
+            p2_meta = _load_model_checkpoint(model_p2, p2_model_load_path, device, phase=2)
             if isinstance(p2_meta, dict) and ("output_part" in p2_meta):
                 ckpt_part = _normalize_output_part(p2_meta["output_part"])
                 if ckpt_part != p2_output_part:

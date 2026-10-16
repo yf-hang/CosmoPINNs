@@ -1,6 +1,7 @@
 import copy
 import torch
 import torch.nn as nn
+from lib.basis_order import BASIS_PERMUTATIONS, permute_legacy_channels
 
 
 def _normalize_output_part(value, default="re"):
@@ -116,6 +117,16 @@ class TransferPinnModel(nn.Module):
         # Transfer initialization: reuse phase-0 input weights for x1/x2;
         # initialize extra dims with mean(x1,x2) weights.
         with torch.no_grad():
+            # Keep each physical component's initialization identical for a fixed seed.
+            for phase in (1, 2):
+                if out_dim == len(BASIS_PERMUTATIONS[phase]):
+                    self.output_layer.weight.copy_(permute_legacy_channels(
+                        self.output_layer.weight, phase=phase, dim=0
+                    ))
+                    self.output_layer.bias.copy_(permute_legacy_channels(
+                        self.output_layer.bias, phase=phase, dim=0
+                    ))
+                    break
             self.input_layer.weight.zero_()
             copy_cols = min(2, phase0_in.in_features, target_in_dim)
             if copy_cols > 0:

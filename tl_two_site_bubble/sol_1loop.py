@@ -1,3 +1,4 @@
+# Empty-subset-first convention: S0={}, S1={y1}, S2={c}.
 import mpmath as mp
 from two_site_chain.sol_chain import eps_to_n_int
 
@@ -7,20 +8,16 @@ def _ws(x1: float, x2: float, y1: float, c: float):
 
     w1 = x1m + y1m + cm
     w2 = x2m + y1m + cm
-
-    w3 = x1m + y1m - cm
-    w4 = x2m + y1m - cm
-
-    w5 = x1m - y1m + cm
-    w6 = x2m - y1m + cm
-
-    w7 = x1m - y1m - cm
-    w8 = x2m - y1m - cm
-
-    w9 = x1m + x2m + 2 * y1m
-    w10 = x1m + x2m + 2 * cm
-    w11 = x1m + x2m
-    return w1, w2, w3, w4, w5, w6, w7, w8, w9, w10, w11
+    w3 = x1m - y1m - cm
+    w4 = x2m - y1m - cm
+    w5 = x1m + y1m - cm
+    w6 = x2m + y1m - cm
+    w7 = x1m - y1m + cm
+    w8 = x2m - y1m + cm
+    w9 = x1m + x2m
+    w10 = x1m + x2m + 2 * y1m
+    w11 = x1m + x2m + 2 * cm
+    return (w1, w2, w3, w4, w5, w6, w7, w8, w9, w10, w11)
 
 def _w_select(x1: float, x2: float, y1: float, c: float, *idx):
     ws = _ws(x1, x2, y1, c)
@@ -30,51 +27,51 @@ def _w_select(x1: float, x2: float, y1: float, c: float, *idx):
 # ---------------- eps = 0 ----------------
 # -----------------------------------------
 def I1_eps0(x1: float, x2: float, y1: float, c: float):
-    w1, w2, w3, w4, w5, w6, w7, w8, _, _, _ = _ws(x1, x2, y1, c)
+    (w1, w2, w3, w4, w5, w6, w7, w8, _, _, _) = _ws(x1, x2, y1, c)
 
     return (-(mp.pi**2) / 6
-            + mp.polylog(2, w3 / w1)
-            + mp.polylog(2, w4 / w2)
-            - mp.polylog(2, (w3 * w4) / (w1 * w2))
             + mp.polylog(2, w5 / w1)
             + mp.polylog(2, w6 / w2)
             - mp.polylog(2, (w5 * w6) / (w1 * w2))
-            - mp.polylog(2, w7 / w1)
-            - mp.polylog(2, w8 / w2)
-            + mp.polylog(2, (w7 * w8) / (w1 * w2)))
+            + mp.polylog(2, w7 / w1)
+            + mp.polylog(2, w8 / w2)
+            - mp.polylog(2, (w7 * w8) / (w1 * w2))
+            - mp.polylog(2, w3 / w1)
+            - mp.polylog(2, w4 / w2)
+            + mp.polylog(2, (w3 * w4) / (w1 * w2)))
 
 def I2_eps0(x1: float, x2: float, y1: float, c: float):
     w2, w9 = _w_select(x1, x2, y1, c, 2, 9)
-    return mp.log(w9 / w2)
-
-def I5_eps0(x1: float, x2: float, y1: float, c: float):
-    w1, w9 = _w_select(x1, x2, y1, c, 1, 9)
-    return mp.log(w9 / w1)
+    return -mp.log(w9 / w2)
 
 def I3_eps0(x1: float, x2: float, y1: float, c: float):
     w2, w10 = _w_select(x1, x2, y1, c, 2, 10)
     return mp.log(w10 / w2)
 
+def I4_eps0(x1: float, x2: float, y1: float, c: float):
+    w2, w11 = _w_select(x1, x2, y1, c, 2, 11)
+    return mp.log(w11 / w2)
+
+def I5_eps0(x1: float, x2: float, y1: float, c: float):
+    w1, w9 = _w_select(x1, x2, y1, c, 1, 9)
+    return -mp.log(w9 / w1)
+
 def I6_eps0(x1: float, x2: float, y1: float, c: float):
     w1, w10 = _w_select(x1, x2, y1, c, 1, 10)
     return mp.log(w10 / w1)
 
-def I4_eps0(x1: float, x2: float, y1: float, c: float):
-    w2, w11 = _w_select(x1, x2, y1, c, 2, 11)
-    return -mp.log(w11 / w2)
-
 def I7_eps0(x1: float, x2: float, y1: float, c: float):
     w1, w11 = _w_select(x1, x2, y1, c, 1, 11)
-    return -mp.log(w11 / w1)
+    return mp.log(w11 / w1)
 
 def I8_eps0(_x1: float, _x2: float, _y1: float, _c: float):
-    return mp.mpf("1")
+    return mp.mpf("-1")
 
 def I9_eps0(_x1: float, _x2: float, _y1: float, _c: float):
     return mp.mpf("1")
 
 def I10_eps0(_x1: float, _x2: float, _y1: float, _c: float):
-    return mp.mpf("-1")
+    return mp.mpf("1")
 
 # ------------------------------------------
 # ---------------- eps = -n ----------------
@@ -91,13 +88,9 @@ def _int_branch_series_sum(w_main, w_main2, n: int):
     )
 
 def I1_eps_int(x1: float, x2: float, y1: float, n: int, c: float):
-    w1, w2, w3, w4, w5, w6, w7, w8, w9, w10, w11 = _ws(x1, x2, y1, c)
+    (w1, w2, w3, w4, w5, w6, w7, w8, w9, w10, w11) = _ws(x1, x2, y1, c)
 
     term0 = 1 / (w1**n * w2**n)
-    term9 = (
-        _jacobi_P_int(n, 1 - 2 * w3 / w9) / (w9**n * w2**n)
-        + _jacobi_P_int(n, 1 - 2 * w4 / w9) / (w9**n * w1**n)
-    )
     term10 = (
         _jacobi_P_int(n, 1 - 2 * w5 / w10) / (w10**n * w2**n)
         + _jacobi_P_int(n, 1 - 2 * w6 / w10) / (w10**n * w1**n)
@@ -106,42 +99,46 @@ def I1_eps_int(x1: float, x2: float, y1: float, n: int, c: float):
         _jacobi_P_int(n, 1 - 2 * w7 / w11) / (w11**n * w2**n)
         + _jacobi_P_int(n, 1 - 2 * w8 / w11) / (w11**n * w1**n)
     )
+    term9 = (
+        _jacobi_P_int(n, 1 - 2 * w3 / w9) / (w9**n * w2**n)
+        + _jacobi_P_int(n, 1 - 2 * w4 / w9) / (w9**n * w1**n)
+    )
 
-    return term0 - term9 - term10 + term11
+    return term0 - term10 - term11 + term9
 
 def I2_eps_int(x1: float, x2: float, y1: float, n: int, c: float):
     w2, w3, w9 = _w_select(x1, x2, y1, c, 2, 3, 9)
     s29 = _int_branch_series_sum(w2, w9, n)
-    return -(w3 / (w2**n * w9**(2*n))) * s29
-
-def I5_eps_int(x1: float, x2: float, y1: float, n: int, c: float):
-    w1, w4, w9 = _w_select(x1, x2, y1, c, 1, 4, 9)
-    s19 = _int_branch_series_sum(w1, w9, n)
-    return -(w4 / (w1**n * w9**(2*n))) * s19
+    return (w3 / (w2**n * w9**(2*n))) * s29
 
 def I3_eps_int(x1: float, x2: float, y1: float, n: int, c: float):
     w2, w5, w10 = _w_select(x1, x2, y1, c, 2, 5, 10)
     s210 = _int_branch_series_sum(w2, w10, n)
     return -(w5 / (w2**n * w10**(2*n))) * s210
 
+def I4_eps_int(x1: float, x2: float, y1: float, n: int, c: float):
+    w2, w7, w11 = _w_select(x1, x2, y1, c, 2, 7, 11)
+    s211 = _int_branch_series_sum(w2, w11, n)
+    return -(w7 / (w2**n * w11**(2*n))) * s211
+
+def I5_eps_int(x1: float, x2: float, y1: float, n: int, c: float):
+    w1, w4, w9 = _w_select(x1, x2, y1, c, 1, 4, 9)
+    s19 = _int_branch_series_sum(w1, w9, n)
+    return (w4 / (w1**n * w9**(2*n))) * s19
+
 def I6_eps_int(x1: float, x2: float, y1: float, n: int, c: float):
     w1, w6, w10 = _w_select(x1, x2, y1, c, 1, 6, 10)
     s110 = _int_branch_series_sum(w1, w10, n)
     return -(w6 / (w1**n * w10**(2*n))) * s110
 
-def I4_eps_int(x1: float, x2: float, y1: float, n: int, c: float):
-    w2, w7, w11 = _w_select(x1, x2, y1, c, 2, 7, 11)
-    s211 = _int_branch_series_sum(w2, w11, n)
-    return (w7 / (w2**n * w11**(2*n))) * s211
-
 def I7_eps_int(x1: float, x2: float, y1: float, n: int, c: float):
     w1, w8, w11 = _w_select(x1, x2, y1, c, 1, 8, 11)
     s111 = _int_branch_series_sum(w1, w11, n)
-    return (w8 / (w1**n * w11**(2*n))) * s111
+    return -(w8 / (w1**n * w11**(2*n))) * s111
 
 def I8_eps_int(x1: float, x2: float, y1: float, n: int, c: float):
     (w9,) = _w_select(x1, x2, y1, c, 9)
-    return mp.binomial(2*n, n) / (w9 ** (2*n))
+    return -mp.binomial(2*n, n) / (w9 ** (2*n))
 
 def I9_eps_int(x1: float, x2: float, y1: float, n: int, c: float):
     (w10,) = _w_select(x1, x2, y1, c, 10)
@@ -149,7 +146,7 @@ def I9_eps_int(x1: float, x2: float, y1: float, n: int, c: float):
 
 def I10_eps_int(x1: float, x2: float, y1: float, n: int, c: float):
     (w11,) = _w_select(x1, x2, y1, c, 11)
-    return -mp.binomial(2*n, n) / (w11 ** (2*n))
+    return mp.binomial(2*n, n) / (w11 ** (2*n))
 
 # ---------------- final solutions ----------------
 EPS_TOL = mp.mpf("1e-12")

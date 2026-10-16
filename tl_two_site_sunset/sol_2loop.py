@@ -1,3 +1,4 @@
+# Empty-subset-first convention: S0={}, S1={y1}, S2={y2}, S3={c}, S4={y1,y2}, S5={y1,c}, S6={y2,c}.
 import mpmath as mp
 from two_site_chain.sol_chain import eps_to_n_int, eps_to_n_pos_int
 
@@ -7,40 +8,33 @@ def _ws(x1: float, x2: float, y1: float, y2: float, c: float):
 
     w1 = x1m + y1m + y2m + cm
     w2 = x2m + y1m + y2m + cm
+    w3 = x1m - y1m - y2m - cm
+    w4 = x2m - y1m - y2m - cm
+    w5 = x1m + y1m - y2m - cm
+    w6 = x2m + y1m - y2m - cm
+    w7 = x1m - y1m + y2m - cm
+    w8 = x2m - y1m + y2m - cm
+    w9 = x1m - y1m - y2m + cm
+    w10 = x2m - y1m - y2m + cm
+    w11 = x1m + y1m + y2m - cm
+    w12 = x2m + y1m + y2m - cm
+    w13 = x1m + y1m - y2m + cm
+    w14 = x2m + y1m - y2m + cm
+    w15 = x1m - y1m + y2m + cm
+    w16 = x2m - y1m + y2m + cm
+    w17 = x1m + x2m
+    w18 = x1m + x2m + 2*y1m
+    w19 = x1m + x2m + 2*y2m
+    w20 = x1m + x2m + 2*cm
+    w21 = x1m + x2m + 2*y1m + 2*y2m
+    w22 = x1m + x2m + 2*y1m + 2*cm
+    w23 = x1m + x2m + 2*y2m + 2*cm
 
-    w9 = x1m + y1m + y2m - cm
-    w10 = x2m + y1m + y2m - cm
-
-    w11 = x1m + y1m - y2m + cm
-    w12 = x2m + y1m - y2m + cm
-
-    w13 = x1m - y1m + y2m + cm
-    w14 = x2m - y1m + y2m + cm
-
-    w3 = x1m + y1m - y2m - cm
-    w4 = x2m + y1m - y2m - cm
-
-    w5 = x1m - y1m + y2m - cm
-    w6 = x2m - y1m + y2m - cm
-
-    w7 = x1m - y1m - y2m + cm
-    w8 = x2m - y1m - y2m + cm
-
-    w15 = x1m - y1m - y2m - cm
-    w16 = x2m - y1m - y2m - cm
-
-    w20 = x1m + x2m + 2*y1m + 2*y2m
-    w21 = x1m + x2m + 2*y1m + 2*cm
-    w22 = x1m + x2m + 2*y2m + 2*cm
-
-    w17 = x1m + x2m + 2*y1m
-    w18 = x1m + x2m + 2*y2m
-    w19 = x1m + x2m + 2*cm
-
-    w23 = x1m + x2m
-
-    return (w1, w2, w3, w4, w5, w6, w7, w8, w9, w10, w11, w12, w13, w14, w15, w16, w17, w18,
-           w19, w20, w21, w22, w23)
+    return (
+        w1, w2, w3, w4, w5, w6, w7, w8,
+        w9, w10, w11, w12, w13, w14, w15, w16,
+        w17, w18, w19, w20, w21, w22, w23,
+    )
 
 def _w_select(x1: float, x2: float, y1: float, y2: float, c: float, *idx):
     ws = _ws(x1, x2, y1, y2, c)
@@ -58,18 +52,15 @@ def I1_eps0(x1: float, x2: float, y1: float, y2: float, c: float):
     )
 
     return (
-        mp.polylog(2, w3 / w1)
-        + mp.polylog(2, w4 / w2)
-        - mp.polylog(2, (w3 * w4) / (w1 * w2))
-        + mp.polylog(2, w5 / w1)
+        mp.polylog(2, w5 / w1)
         + mp.polylog(2, w6 / w2)
         - mp.polylog(2, (w5 * w6) / (w1 * w2))
         + mp.polylog(2, w7 / w1)
         + mp.polylog(2, w8 / w2)
         - mp.polylog(2, (w7 * w8) / (w1 * w2))
-        - mp.polylog(2, w9 / w1)
-        - mp.polylog(2, w10 / w2)
-        + mp.polylog(2, (w9 * w10) / (w1 * w2))
+        + mp.polylog(2, w9 / w1)
+        + mp.polylog(2, w10 / w2)
+        - mp.polylog(2, (w9 * w10) / (w1 * w2))
         - mp.polylog(2, w11 / w1)
         - mp.polylog(2, w12 / w2)
         + mp.polylog(2, (w11 * w12) / (w1 * w2))
@@ -79,12 +70,15 @@ def I1_eps0(x1: float, x2: float, y1: float, y2: float, c: float):
         - mp.polylog(2, w15 / w1)
         - mp.polylog(2, w16 / w2)
         + mp.polylog(2, (w15 * w16) / (w1 * w2))
+        - mp.polylog(2, w3 / w1)
+        - mp.polylog(2, w4 / w2)
+        + mp.polylog(2, (w3 * w4) / (w1 * w2))
         + (mp.pi**2) / 6
     )
 
 def I2_eps0(x1: float, x2: float, y1: float, y2: float, c: float):
-    w17, w2 = _w_select(x1, x2, y1, y2, c, 17, 2)
-    return mp.log(w17 / w2)
+    w2, w17 = _w_select(x1, x2, y1, y2, c, 2, 17)
+    return mp.log(w2 / w17)
 
 def I3_eps0(x1: float, x2: float, y1: float, y2: float, c: float):
     w18, w2 = _w_select(x1, x2, y1, y2, c, 18, 2)
@@ -95,8 +89,8 @@ def I4_eps0(x1: float, x2: float, y1: float, y2: float, c: float):
     return mp.log(w19 / w2)
 
 def I5_eps0(x1: float, x2: float, y1: float, y2: float, c: float):
-    w2, w20 = _w_select(x1, x2, y1, y2, c, 2, 20)
-    return mp.log(w2 / w20)
+    w20, w2 = _w_select(x1, x2, y1, y2, c, 20, 2)
+    return mp.log(w20 / w2)
 
 def I6_eps0(x1: float, x2: float, y1: float, y2: float, c: float):
     w2, w21 = _w_select(x1, x2, y1, y2, c, 2, 21)
@@ -111,8 +105,8 @@ def I8_eps0(x1: float, x2: float, y1: float, y2: float, c: float):
     return mp.log(w2 / w23)
 
 def I9_eps0(x1: float, x2: float, y1: float, y2: float, c: float):
-    w17, w1 = _w_select(x1, x2, y1, y2, c, 17, 1)
-    return mp.log(w17 / w1)
+    w1, w17 = _w_select(x1, x2, y1, y2, c, 1, 17)
+    return mp.log(w1 / w17)
 
 def I10_eps0(x1: float, x2: float, y1: float, y2: float, c: float):
     w18, w1 = _w_select(x1, x2, y1, y2, c, 18, 1)
@@ -123,8 +117,8 @@ def I11_eps0(x1: float, x2: float, y1: float, y2: float, c: float):
     return mp.log(w19 / w1)
 
 def I12_eps0(x1: float, x2: float, y1: float, y2: float, c: float):
-    w1, w20 = _w_select(x1, x2, y1, y2, c, 1, 20)
-    return mp.log(w1 / w20)
+    w20, w1 = _w_select(x1, x2, y1, y2, c, 20, 1)
+    return mp.log(w20 / w1)
 
 def I13_eps0(x1: float, x2: float, y1: float, y2: float, c: float):
     w1, w21 = _w_select(x1, x2, y1, y2, c, 1, 21)
@@ -139,7 +133,7 @@ def I15_eps0(x1: float, x2: float, y1: float, y2: float, c: float):
     return mp.log(w1 / w23)
 
 def I16_eps0(_x1: float, _x2: float, _y1: float, _y2: float, _c: float):
-    return mp.mpf("1")
+    return mp.mpf("-1")
 
 def I17_eps0(_x1: float, _x2: float, _y1: float, _y2: float, _c: float):
     return mp.mpf("1")
@@ -148,7 +142,7 @@ def I18_eps0(_x1: float, _x2: float, _y1: float, _y2: float, _c: float):
     return mp.mpf("1")
 
 def I19_eps0(_x1: float, _x2: float, _y1: float, _y2: float, _c: float):
-    return mp.mpf("-1")
+    return mp.mpf("1")
 
 def I20_eps0(_x1: float, _x2: float, _y1: float, _y2: float, _c: float):
     return mp.mpf("-1")
@@ -185,18 +179,18 @@ def _pos_int_const_branch(w_main, n: int, *, sign=1):
 def I1_eps_pos_int(x1: float, x2: float, y1: float, y2: float, n: int, c: float):
     w1, w2 = _w_select(x1, x2, y1, y2, c, 1, 2)
     return ( - (w1**n * w2**n)
-        + (I2_eps_pos_int(x1, x2, y1, y2, n, c) + I9_eps_pos_int(x1, x2, y1, y2, n, c) - I16_eps_pos_int(x1, x2, y1, y2, n, c))
         + (I3_eps_pos_int(x1, x2, y1, y2, n, c) + I10_eps_pos_int(x1, x2, y1, y2, n, c) - I17_eps_pos_int(x1, x2, y1, y2, n, c))
         + (I4_eps_pos_int(x1, x2, y1, y2, n, c) + I11_eps_pos_int(x1, x2, y1, y2, n, c) - I18_eps_pos_int(x1, x2, y1, y2, n, c))
         + (I5_eps_pos_int(x1, x2, y1, y2, n, c) + I12_eps_pos_int(x1, x2, y1, y2, n, c) - I19_eps_pos_int(x1, x2, y1, y2, n, c))
         + (I6_eps_pos_int(x1, x2, y1, y2, n, c) + I13_eps_pos_int(x1, x2, y1, y2, n, c) - I20_eps_pos_int(x1, x2, y1, y2, n, c))
         + (I7_eps_pos_int(x1, x2, y1, y2, n, c) + I14_eps_pos_int(x1, x2, y1, y2, n, c) - I21_eps_pos_int(x1, x2, y1, y2, n, c))
         + (I8_eps_pos_int(x1, x2, y1, y2, n, c) + I15_eps_pos_int(x1, x2, y1, y2, n, c) - I22_eps_pos_int(x1, x2, y1, y2, n, c))
+        + (I2_eps_pos_int(x1, x2, y1, y2, n, c) + I9_eps_pos_int(x1, x2, y1, y2, n, c) - I16_eps_pos_int(x1, x2, y1, y2, n, c))
     )
 
 def I2_eps_pos_int(x1: float, x2: float, y1: float, y2: float, n: int, c: float):
     w2, w3 = _w_select(x1, x2, y1, y2, c, 2, 3)
-    return _pos_int_branch(w2, w3, n)
+    return _pos_int_branch(w2, w3, n, sign=-1)
 
 def I3_eps_pos_int(x1: float, x2: float, y1: float, y2: float, n: int, c: float):
     w2, w5 = _w_select(x1, x2, y1, y2, c, 2, 5)
@@ -208,7 +202,7 @@ def I4_eps_pos_int(x1: float, x2: float, y1: float, y2: float, n: int, c: float)
 
 def I5_eps_pos_int(x1: float, x2: float, y1: float, y2: float, n: int, c: float):
     w2, w9 = _w_select(x1, x2, y1, y2, c, 2, 9)
-    return _pos_int_branch(w2, w9, n, sign=-1)
+    return _pos_int_branch(w2, w9, n)
 
 def I6_eps_pos_int(x1: float, x2: float, y1: float, y2: float, n: int, c: float):
     w2, w11 = _w_select(x1, x2, y1, y2, c, 2, 11)
@@ -224,7 +218,7 @@ def I8_eps_pos_int(x1: float, x2: float, y1: float, y2: float, n: int, c: float)
 
 def I9_eps_pos_int(x1: float, x2: float, y1: float, y2: float, n: int, c: float):
     w1, w4 = _w_select(x1, x2, y1, y2, c, 1, 4)
-    return _pos_int_branch(w1, w4, n)
+    return _pos_int_branch(w1, w4, n, sign=-1)
 
 def I10_eps_pos_int(x1: float, x2: float, y1: float, y2: float, n: int, c: float):
     w1, w6 = _w_select(x1, x2, y1, y2, c, 1, 6)
@@ -236,7 +230,7 @@ def I11_eps_pos_int(x1: float, x2: float, y1: float, y2: float, n: int, c: float
 
 def I12_eps_pos_int(x1: float, x2: float, y1: float, y2: float, n: int, c: float):
     w1, w10 = _w_select(x1, x2, y1, y2, c, 1, 10)
-    return _pos_int_branch(w1, w10, n, sign=-1)
+    return _pos_int_branch(w1, w10, n)
 
 def I13_eps_pos_int(x1: float, x2: float, y1: float, y2: float, n: int, c: float):
     w1, w12 = _w_select(x1, x2, y1, y2, c, 1, 12)
@@ -252,7 +246,7 @@ def I15_eps_pos_int(x1: float, x2: float, y1: float, y2: float, n: int, c: float
 
 def I16_eps_pos_int(x1: float, x2: float, y1: float, y2: float, n: int, c: float):
     (w17,) = _w_select(x1, x2, y1, y2, c, 17)
-    return _pos_int_const_branch(w17, n)
+    return _pos_int_const_branch(w17, n, sign=-1)
 
 def I17_eps_pos_int(x1: float, x2: float, y1: float, y2: float, n: int, c: float):
     (w18,) = _w_select(x1, x2, y1, y2, c, 18)
@@ -264,7 +258,7 @@ def I18_eps_pos_int(x1: float, x2: float, y1: float, y2: float, n: int, c: float
 
 def I19_eps_pos_int(x1: float, x2: float, y1: float, y2: float, n: int, c: float):
     (w20,) = _w_select(x1, x2, y1, y2, c, 20)
-    return _pos_int_const_branch(w20, n, sign=-1)
+    return _pos_int_const_branch(w20, n)
 
 def I20_eps_pos_int(x1: float, x2: float, y1: float, y2: float, n: int, c: float):
     (w21,) = _w_select(x1, x2, y1, y2, c, 21)
@@ -299,20 +293,19 @@ def I1_eps_int(x1: float, x2: float, y1: float, y2: float, n: int, c: float):
     w1, w2 = _w_select(x1, x2, y1, y2, c, 1, 2)
     return (
         -1 / (w1**n * w2**n)
-        + (I2_eps_int(x1, x2, y1, y2, n, c) + I9_eps_int(x1, x2, y1, y2, n, c) - I16_eps_int(x1, x2, y1, y2, n, c))
         + (I3_eps_int(x1, x2, y1, y2, n, c) + I10_eps_int(x1, x2, y1, y2, n, c) - I17_eps_int(x1, x2, y1, y2, n, c))
         + (I4_eps_int(x1, x2, y1, y2, n, c) + I11_eps_int(x1, x2, y1, y2, n, c) - I18_eps_int(x1, x2, y1, y2, n, c))
         + (I5_eps_int(x1, x2, y1, y2, n, c) + I12_eps_int(x1, x2, y1, y2, n, c) - I19_eps_int(x1, x2, y1, y2, n, c))
         + (I6_eps_int(x1, x2, y1, y2, n, c) + I13_eps_int(x1, x2, y1, y2, n, c) - I20_eps_int(x1, x2, y1, y2, n, c))
         + (I7_eps_int(x1, x2, y1, y2, n, c) + I14_eps_int(x1, x2, y1, y2, n, c) - I21_eps_int(x1, x2, y1, y2, n, c))
         + (I8_eps_int(x1, x2, y1, y2, n, c) + I15_eps_int(x1, x2, y1, y2, n, c) - I22_eps_int(x1, x2, y1, y2, n, c))
+        + (I2_eps_int(x1, x2, y1, y2, n, c) + I9_eps_int(x1, x2, y1, y2, n, c) - I16_eps_int(x1, x2, y1, y2, n, c))
     )
-
 
 def I2_eps_int(x1: float, x2: float, y1: float, y2: float, n: int, c: float):
     w2, w3, w17 = _w_select(x1, x2, y1, y2, c, 2, 3, 17)
     s = _int_branch_series_sum(w2, w17, n)
-    return -(w3 / (w2**n * w17**(2 * n))) * s
+    return (w3 / (w2**n * w17**(2 * n))) * s
 
 def I3_eps_int(x1: float, x2: float, y1: float, y2: float, n: int, c: float):
     w2, w5, w18 = _w_select(x1, x2, y1, y2, c, 2, 5, 18)
@@ -327,7 +320,7 @@ def I4_eps_int(x1: float, x2: float, y1: float, y2: float, n: int, c: float):
 def I5_eps_int(x1: float, x2: float, y1: float, y2: float, n: int, c: float):
     w2, w9, w20 = _w_select(x1, x2, y1, y2, c, 2, 9, 20)
     s = _int_branch_series_sum(w2, w20, n)
-    return (w9 / (w2**n * w20**(2 * n))) * s
+    return -(w9 / (w2**n * w20**(2 * n))) * s
 
 def I6_eps_int(x1: float, x2: float, y1: float, y2: float, n: int, c: float):
     w2, w11, w21 = _w_select(x1, x2, y1, y2, c, 2, 11, 21)
@@ -344,11 +337,10 @@ def I8_eps_int(x1: float, x2: float, y1: float, y2: float, n: int, c: float):
     s = _int_branch_series_sum(w2, w23, n)
     return (w15 / (w2**n * w23**(2 * n))) * s
 
-
 def I9_eps_int(x1: float, x2: float, y1: float, y2: float, n: int, c: float):
     w1, w4, w17 = _w_select(x1, x2, y1, y2, c, 1, 4, 17)
     s = _int_branch_series_sum(w1, w17, n)
-    return -(w4 / (w1**n * w17**(2 * n))) * s
+    return (w4 / (w1**n * w17**(2 * n))) * s
 
 def I10_eps_int(x1: float, x2: float, y1: float, y2: float, n: int, c: float):
     w1, w6, w18 = _w_select(x1, x2, y1, y2, c, 1, 6, 18)
@@ -363,7 +355,7 @@ def I11_eps_int(x1: float, x2: float, y1: float, y2: float, n: int, c: float):
 def I12_eps_int(x1: float, x2: float, y1: float, y2: float, n: int, c: float):
     w1, w10, w20 = _w_select(x1, x2, y1, y2, c, 1, 10, 20)
     s = _int_branch_series_sum(w1, w20, n)
-    return (w10 / (w1**n * w20**(2 * n))) * s
+    return -(w10 / (w1**n * w20**(2 * n))) * s
 
 def I13_eps_int(x1: float, x2: float, y1: float, y2: float, n: int, c: float):
     w1, w12, w21 = _w_select(x1, x2, y1, y2, c, 1, 12, 21)
@@ -380,10 +372,9 @@ def I15_eps_int(x1: float, x2: float, y1: float, y2: float, n: int, c: float):
     s = _int_branch_series_sum(w1, w23, n)
     return (w16 / (w1**n * w23**(2 * n))) * s
 
-
 def I16_eps_int(x1: float, x2: float, y1: float, y2: float, n: int, c: float):
     (w17,) = _w_select(x1, x2, y1, y2, c, 17)
-    return mp.binomial(2*n, n) / (w17 ** (2*n))
+    return -mp.binomial(2*n, n) / (w17 ** (2*n))
 
 def I17_eps_int(x1: float, x2: float, y1: float, y2: float, n: int, c: float):
     (w18,) = _w_select(x1, x2, y1, y2, c, 18)
@@ -395,7 +386,7 @@ def I18_eps_int(x1: float, x2: float, y1: float, y2: float, n: int, c: float):
 
 def I19_eps_int(x1: float, x2: float, y1: float, y2: float, n: int, c: float):
     (w20,) = _w_select(x1, x2, y1, y2, c, 20)
-    return -mp.binomial(2*n, n) / (w20 ** (2*n))
+    return mp.binomial(2*n, n) / (w20 ** (2*n))
 
 def I20_eps_int(x1: float, x2: float, y1: float, y2: float, n: int, c: float):
     (w21,) = _w_select(x1, x2, y1, y2, c, 21)
@@ -439,86 +430,65 @@ def _eval_fin(fn_eps0, fn_eps_pos_int, fn_eps_int, x1: float, x2: float, y1: flo
 def I1_fin(x1: float, x2: float, y1: float, y2: float, eps: float, c: float):
     return _eval_fin(I1_eps0, I1_eps_pos_int, I1_eps_int, x1, x2, y1, y2, eps, c)
 
-
 def I2_fin(x1: float, x2: float, y1: float, y2: float, eps: float, c: float):
     return _eval_fin(I2_eps0, I2_eps_pos_int, I2_eps_int, x1, x2, y1, y2, eps, c)
-
 
 def I3_fin(x1: float, x2: float, y1: float, y2: float, eps: float, c: float):
     return _eval_fin(I3_eps0, I3_eps_pos_int, I3_eps_int, x1, x2, y1, y2, eps, c)
 
-
 def I4_fin(x1: float, x2: float, y1: float, y2: float, eps: float, c: float):
     return _eval_fin(I4_eps0, I4_eps_pos_int, I4_eps_int, x1, x2, y1, y2, eps, c)
-
 
 def I5_fin(x1: float, x2: float, y1: float, y2: float, eps: float, c: float):
     return _eval_fin(I5_eps0, I5_eps_pos_int, I5_eps_int, x1, x2, y1, y2, eps, c)
 
-
 def I6_fin(x1: float, x2: float, y1: float, y2: float, eps: float, c: float):
     return _eval_fin(I6_eps0, I6_eps_pos_int, I6_eps_int, x1, x2, y1, y2, eps, c)
-
 
 def I7_fin(x1: float, x2: float, y1: float, y2: float, eps: float, c: float):
     return _eval_fin(I7_eps0, I7_eps_pos_int, I7_eps_int, x1, x2, y1, y2, eps, c)
 
-
 def I8_fin(x1: float, x2: float, y1: float, y2: float, eps: float, c: float):
     return _eval_fin(I8_eps0, I8_eps_pos_int, I8_eps_int, x1, x2, y1, y2, eps, c)
-
 
 def I9_fin(x1: float, x2: float, y1: float, y2: float, eps: float, c: float):
     return _eval_fin(I9_eps0, I9_eps_pos_int, I9_eps_int, x1, x2, y1, y2, eps, c)
 
-
 def I10_fin(x1: float, x2: float, y1: float, y2: float, eps: float, c: float):
     return _eval_fin(I10_eps0, I10_eps_pos_int, I10_eps_int, x1, x2, y1, y2, eps, c)
-
 
 def I11_fin(x1: float, x2: float, y1: float, y2: float, eps: float, c: float):
     return _eval_fin(I11_eps0, I11_eps_pos_int, I11_eps_int, x1, x2, y1, y2, eps, c)
 
-
 def I12_fin(x1: float, x2: float, y1: float, y2: float, eps: float, c: float):
     return _eval_fin(I12_eps0, I12_eps_pos_int, I12_eps_int, x1, x2, y1, y2, eps, c)
-
 
 def I13_fin(x1: float, x2: float, y1: float, y2: float, eps: float, c: float):
     return _eval_fin(I13_eps0, I13_eps_pos_int, I13_eps_int, x1, x2, y1, y2, eps, c)
 
-
 def I14_fin(x1: float, x2: float, y1: float, y2: float, eps: float, c: float):
     return _eval_fin(I14_eps0, I14_eps_pos_int, I14_eps_int, x1, x2, y1, y2, eps, c)
-
 
 def I15_fin(x1: float, x2: float, y1: float, y2: float, eps: float, c: float):
     return _eval_fin(I15_eps0, I15_eps_pos_int, I15_eps_int, x1, x2, y1, y2, eps, c)
 
-
 def I16_fin(x1: float, x2: float, y1: float, y2: float, eps: float, c: float):
     return _eval_fin(I16_eps0, I16_eps_pos_int, I16_eps_int, x1, x2, y1, y2, eps, c)
-
 
 def I17_fin(x1: float, x2: float, y1: float, y2: float, eps: float, c: float):
     return _eval_fin(I17_eps0, I17_eps_pos_int, I17_eps_int, x1, x2, y1, y2, eps, c)
 
-
 def I18_fin(x1: float, x2: float, y1: float, y2: float, eps: float, c: float):
     return _eval_fin(I18_eps0, I18_eps_pos_int, I18_eps_int, x1, x2, y1, y2, eps, c)
-
 
 def I19_fin(x1: float, x2: float, y1: float, y2: float, eps: float, c: float):
     return _eval_fin(I19_eps0, I19_eps_pos_int, I19_eps_int, x1, x2, y1, y2, eps, c)
 
-
 def I20_fin(x1: float, x2: float, y1: float, y2: float, eps: float, c: float):
     return _eval_fin(I20_eps0, I20_eps_pos_int, I20_eps_int, x1, x2, y1, y2, eps, c)
 
-
 def I21_fin(x1: float, x2: float, y1: float, y2: float, eps: float, c: float):
     return _eval_fin(I21_eps0, I21_eps_pos_int, I21_eps_int, x1, x2, y1, y2, eps, c)
-
 
 def I22_fin(x1: float, x2: float, y1: float, y2: float, eps: float, c: float):
     return _eval_fin(I22_eps0, I22_eps_pos_int, I22_eps_int, x1, x2, y1, y2, eps, c)

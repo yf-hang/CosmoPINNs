@@ -1,3 +1,4 @@
+# Empty-subset-first convention: S0={}, S1={y1}, S2={y2}, S3={c}, S4={y1,y2}, S5={y1,c}, S6={y2,c}.
 import torch
 import torch.nn as nn
 
@@ -21,140 +22,72 @@ class ConnectionAMatricesBase2Loop(nn.Module):
         # Keep the letter ordering consistent with tl_two_site_sunset/sol_2loop.py::_ws.
         w1 = x1 + y1 + y2 + cy_val
         w2 = x2 + y1 + y2 + cy_val
-        w9 = x1 + y1 + y2 - cy_val
-        w10 = x2 + y1 + y2 - cy_val
-        w11 = x1 + y1 - y2 + cy_val
-        w12 = x2 + y1 - y2 + cy_val
-        w13 = x1 - y1 + y2 + cy_val
-        w14 = x2 - y1 + y2 + cy_val
-        w3 = x1 + y1 - y2 - cy_val
-        w4 = x2 + y1 - y2 - cy_val
-        w5 = x1 - y1 + y2 - cy_val
-        w6 = x2 - y1 + y2 - cy_val
-        w7 = x1 - y1 - y2 + cy_val
-        w8 = x2 - y1 - y2 + cy_val
-        w15 = x1 - y1 - y2 - cy_val
-        w16 = x2 - y1 - y2 - cy_val
-        w20 = x1 + x2 + 2.0 * y1 + 2.0 * y2
-        w21 = x1 + x2 + 2.0 * y1 + 2.0 * cy_val
-        w22 = x1 + x2 + 2.0 * y2 + 2.0 * cy_val
-        w17 = x1 + x2 + 2.0 * y1
-        w18 = x1 + x2 + 2.0 * y2
-        w19 = x1 + x2 + 2.0 * cy_val
-        w23 = x1 + x2
+        w3 = x1 - y1 - y2 - cy_val
+        w4 = x2 - y1 - y2 - cy_val
+        w5 = x1 + y1 - y2 - cy_val
+        w6 = x2 + y1 - y2 - cy_val
+        w7 = x1 - y1 + y2 - cy_val
+        w8 = x2 - y1 + y2 - cy_val
+        w9 = x1 - y1 - y2 + cy_val
+        w10 = x2 - y1 - y2 + cy_val
+        w11 = x1 + y1 + y2 - cy_val
+        w12 = x2 + y1 + y2 - cy_val
+        w13 = x1 + y1 - y2 + cy_val
+        w14 = x2 + y1 - y2 + cy_val
+        w15 = x1 - y1 + y2 + cy_val
+        w16 = x2 - y1 + y2 + cy_val
+        w17 = x1 + x2
+        w18 = x1 + x2 + 2.0 * y1
+        w19 = x1 + x2 + 2.0 * y2
+        w20 = x1 + x2 + 2.0 * cy_val
+        w21 = x1 + x2 + 2.0 * y1 + 2.0 * y2
+        w22 = x1 + x2 + 2.0 * y1 + 2.0 * cy_val
+        w23 = x1 + x2 + 2.0 * y2 + 2.0 * cy_val
 
         dlog_dx1 = torch.stack(
             [
-                1 / w1,
-                zeros,
-                1 / w3,
-                zeros,
-                1 / w5,
-                zeros,
-                1 / w7,
-                zeros,
-                1 / w9,
-                zeros,
-                1 / w11,
-                zeros,
-                1 / w13,
-                zeros,
-                1 / w15,
-                zeros,
-                1 / w17,
-                1 / w18,
-                1 / w19,
-                1 / w20,
-                1 / w21,
-                1 / w22,
-                1 / w23,
+                1 / w1, zeros, 1 / w3, zeros,
+                1 / w5, zeros, 1 / w7, zeros,
+                1 / w9, zeros, 1 / w11, zeros,
+                1 / w13, zeros, 1 / w15, zeros,
+                1 / w17, 1 / w18, 1 / w19, 1 / w20,
+                1 / w21, 1 / w22, 1 / w23,
             ],
             dim=1,
         )
 
         dlog_dx2 = torch.stack(
             [
-                zeros,
-                1 / w2,
-                zeros,
-                1 / w4,
-                zeros,
-                1 / w6,
-                zeros,
-                1 / w8,
-                zeros,
-                1 / w10,
-                zeros,
-                1 / w12,
-                zeros,
-                1 / w14,
-                zeros,
-                1 / w16,
-                1 / w17,
-                1 / w18,
-                1 / w19,
-                1 / w20,
-                1 / w21,
-                1 / w22,
-                1 / w23,
+                zeros, 1 / w2, zeros, 1 / w4,
+                zeros, 1 / w6, zeros, 1 / w8,
+                zeros, 1 / w10, zeros, 1 / w12,
+                zeros, 1 / w14, zeros, 1 / w16,
+                1 / w17, 1 / w18, 1 / w19, 1 / w20,
+                1 / w21, 1 / w22, 1 / w23,
             ],
             dim=1,
         )
 
         dlog_dy1 = torch.stack(
             [
-                1 / w1,
-                1 / w2,
-                1 / w3,
-                1 / w4,
-                -1 / w5,
-                -1 / w6,
-                -1 / w7,
-                -1 / w8,
-                1 / w9,
-                1 / w10,
-                1 / w11,
-                1 / w12,
-                -1 / w13,
-                -1 / w14,
-                -1 / w15,
-                -1 / w16,
-                2 / w17,
-                zeros,
-                zeros,
-                2 / w20,
-                2 / w21,
-                zeros,
-                zeros,
+                1 / w1, 1 / w2, -1 / w3, -1 / w4,
+                1 / w5, 1 / w6, -1 / w7, -1 / w8,
+                -1 / w9, -1 / w10, 1 / w11, 1 / w12,
+                1 / w13, 1 / w14, -1 / w15, -1 / w16,
+                zeros, 2 / w18, zeros, zeros,
+                2 / w21, 2 / w22, zeros,
             ],
             dim=1,
         )
 
         dlog_dy2 = torch.stack(
             [
-                1 / w1,
-                1 / w2,
-                -1 / w3,
-                -1 / w4,
-                1 / w5,
-                1 / w6,
-                -1 / w7,
-                -1 / w8,
-                1 / w9,
-                1 / w10,
-                -1 / w11,
-                -1 / w12,
-                1 / w13,
-                1 / w14,
-                -1 / w15,
-                -1 / w16,
-                zeros,
-                2 / w18,
-                zeros,
-                2 / w20,
-                zeros,
-                2 / w22,
-                zeros,
+                1 / w1, 1 / w2, -1 / w3, -1 / w4,
+                -1 / w5, -1 / w6, 1 / w7, 1 / w8,
+                -1 / w9, -1 / w10, 1 / w11, 1 / w12,
+                -1 / w13, -1 / w14, 1 / w15, 1 / w16,
+                zeros, zeros, 2 / w19, zeros,
+                2 / w21, zeros, 2 / w23,
             ],
             dim=1,
         )

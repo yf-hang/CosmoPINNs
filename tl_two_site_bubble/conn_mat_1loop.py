@@ -1,4 +1,4 @@
-# lib/conn_matrices_1loop.py
+# Empty-subset-first convention: S0={}, S1={y1}, S2={c}.
 import torch
 import torch.nn as nn
 
@@ -6,13 +6,11 @@ class ConnectionAMatricesBase1Loop(nn.Module):
     """
     1-loop A-matrix
     A_i(x) = sum_k A_k * ∂_{x_i} log w_k
-    Letters: w1, w3  = x1 + y1 + cy_val , x1 + y1 - cy_val
-             w2, w4  = x2 + y1 + cy_val , x2 + y1 - cy_val
-             w5, w7  = x1 - y1 + cy_val , x1 - y1 - cy_val
-             w6, w8  = x2 - y1 + cy_val , x2 - y1 - cy_val
-             w9   = x1 + x2 + 2 * y1
-             w10  = x1 + x2 + 2 * cy_val
-             w11  = x1 + x2
+    w1,w2: x1,x2 + y1 + cy_val
+    w3,w4: x1,x2 - y1 - cy_val (S0 = empty)
+    w5,w6: x1,x2 + y1 - cy_val (S1 = {y1})
+    w7,w8: x1,x2 - y1 + cy_val (S2 = {cy_val})
+    w9 = x1 + x2; w10 = w9 + 2*y1; w11 = w9 + 2*cy_val.
     """
     def __init__(self, n_basis=10, n_letters=11, cy_val=None):
         super().__init__()
@@ -25,30 +23,44 @@ class ConnectionAMatricesBase1Loop(nn.Module):
         # x1,x2,y1: (N,1)
         zeros = torch.zeros_like(x1)
 
-        w1, w3 = x1 + y1 + cy_val, x1 + y1 - cy_val
-        w2, w4 = x2 + y1 + cy_val, x2 + y1 - cy_val
+        w1 = x1 + y1 + cy_val
+        w2 = x2 + y1 + cy_val
+        w3 = x1 - y1 - cy_val
+        w4 = x2 - y1 - cy_val
+        w5 = x1 + y1 - cy_val
+        w6 = x2 + y1 - cy_val
+        w7 = x1 - y1 + cy_val
+        w8 = x2 - y1 + cy_val
+        w9 = x1 + x2
+        w10  = x1 + x2 + 2.0 * y1
+        w11 = x1 + x2 + 2.0 * cy_val
 
-        w5, w7 = x1 - y1 + cy_val, x1 - y1 - cy_val
-        w6, w8 = x2 - y1 + cy_val, x2 - y1 - cy_val
+        dlog_dx1 = torch.stack(
+            [
+                1 / w1, zeros, 1 / w3, zeros,
+                1 / w5, zeros, 1 / w7, zeros,
+                1 / w9, 1 / w10, 1 / w11,
+            ],
+            dim=1,
+        )
 
-        w9  = x1 + x2 + 2.0 * y1
-        w10 = x1 + x2 + 2.0 * cy_val
-        w11 = x1 + x2
+        dlog_dx2 = torch.stack(
+            [
+                zeros, 1 / w2, zeros, 1 / w4,
+                zeros, 1 / w6, zeros, 1 / w8,
+                1 / w9, 1 / w10, 1 / w11,
+            ],
+            dim=1,
+        )
 
-        dlog_dx1 = torch.stack([
-            1 / w1, zeros, 1 / w3, zeros, 1 / w5, zeros, 1 / w7, zeros, 1 / w9, 1 / w10, 1 / w11
-        ], dim=1)
-
-        dlog_dx2 = torch.stack([
-            zeros, 1 / w2, zeros, 1 / w4, zeros, 1 / w6, zeros, 1 / w8, 1 / w9, 1 / w10, 1 / w11
-        ], dim=1)
-
-        dlog_dy1 = torch.stack([
-            1 / w1, 1 / w2, 1 / w3, 1 / w4,
-            -1 / w5, -1 / w6, -1 / w7, -1 / w8,
-            2 / w9,
-            zeros, zeros
-        ], dim=1)
+        dlog_dy1 = torch.stack(
+            [
+                1 / w1, 1 / w2, -1 / w3, -1 / w4,
+                1 / w5, 1 / w6, -1 / w7, -1 / w8,
+                zeros, 2 / w10, zeros,
+            ],
+            dim=1,
+        )
 
         # each return tensor has shape (N, n_letters, 1)
         return dlog_dx1, dlog_dx2, dlog_dy1

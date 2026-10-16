@@ -5,16 +5,6 @@
 
 (* CreatedBy='Mathematica 14.0' *)
 
-(*CacheID: 234*)
-(* Internal cache information:
-NotebookFileLineBreakTest
-NotebookFileLineBreakTest
-NotebookDataPosition[       158,          7]
-NotebookDataLength[     15042,        445]
-NotebookOptionsPosition[     14315,        427]
-NotebookOutlinePosition[     14712,        443]
-CellTagsIndexPosition[     14669,        440]
-WindowFrame->Normal*)
 
 (* Beginning of Notebook Content *)
 Notebook[{
@@ -27,25 +17,25 @@ Cell[BoxData[
      RowBox[{"x1", "+", "y1", "+", "c"}]}], ",", "\[IndentingNewLine]", 
     RowBox[{"w2", "->", 
      RowBox[{"x2", "+", "y1", "+", "c"}]}], ",", "\[IndentingNewLine]", 
-    RowBox[{"w3", "->", 
-     RowBox[{"x1", "+", "y1", "-", "c"}]}], ",", "\[IndentingNewLine]", 
-    RowBox[{"w4", "->", 
-     RowBox[{"x2", "+", "y1", "-", "c"}]}], ",", "\[IndentingNewLine]", 
     RowBox[{"w5", "->", 
-     RowBox[{"x1", "-", "y1", "+", "c"}]}], ",", "\[IndentingNewLine]", 
+     RowBox[{"x1", "+", "y1", "-", "c"}]}], ",", "\[IndentingNewLine]", 
     RowBox[{"w6", "->", 
-     RowBox[{"x2", "-", "y1", "+", "c"}]}], ",", "\[IndentingNewLine]", 
+     RowBox[{"x2", "+", "y1", "-", "c"}]}], ",", "\[IndentingNewLine]", 
     RowBox[{"w7", "->", 
-     RowBox[{"x1", "-", "y1", "-", "c"}]}], ",", "\[IndentingNewLine]", 
+     RowBox[{"x1", "-", "y1", "+", "c"}]}], ",", "\[IndentingNewLine]", 
     RowBox[{"w8", "->", 
+     RowBox[{"x2", "-", "y1", "+", "c"}]}], ",", "\[IndentingNewLine]", 
+    RowBox[{"w3", "->", 
+     RowBox[{"x1", "-", "y1", "-", "c"}]}], ",", "\[IndentingNewLine]", 
+    RowBox[{"w4", "->", 
      RowBox[{"x2", "-", "y1", "-", "c"}]}], ",", "\[IndentingNewLine]", 
-    RowBox[{"w9", "->", 
-     RowBox[{"x1", "+", "x2", "+", 
-      RowBox[{"2", "y1"}]}]}], ",", "\[IndentingNewLine]", 
     RowBox[{"w10", "->", 
      RowBox[{"x1", "+", "x2", "+", 
-      RowBox[{"2", "c"}]}]}], ",", "\[IndentingNewLine]", 
+      RowBox[{"2", "y1"}]}]}], ",", "\[IndentingNewLine]", 
     RowBox[{"w11", "->", 
+     RowBox[{"x1", "+", "x2", "+", 
+      RowBox[{"2", "c"}]}]}], ",", "\[IndentingNewLine]", 
+    RowBox[{"w9", "->", 
      RowBox[{"x1", "+", "x2"}]}]}], "}"}]}]], "Input",
  CellChangeTimes->{{3.982961532759554*^9, 3.9829615425365896`*^9}, 
    3.9829622594393473`*^9},ExpressionUUID->"a7a718cf-440a-4c47-a515-\
@@ -68,17 +58,6 @@ Cell[BoxData[{
        SuperscriptBox["\[Pi]", "2"], "6"]}], "+", 
      RowBox[{"PolyLog", "[", 
       RowBox[{"2", ",", 
-       FractionBox["w3", "w1"]}], "]"}], "+", 
-     RowBox[{"PolyLog", "[", 
-      RowBox[{"2", ",", 
-       FractionBox["w4", "w2"]}], "]"}], "-", 
-     RowBox[{"PolyLog", "[", 
-      RowBox[{"2", ",", 
-       FractionBox[
-        RowBox[{"w3", "*", "w4"}], 
-        RowBox[{"w1", "*", "w2"}]]}], "]"}], "+", "\[IndentingNewLine]", 
-     RowBox[{"PolyLog", "[", 
-      RowBox[{"2", ",", 
        FractionBox["w5", "w1"]}], "]"}], "+", 
      RowBox[{"PolyLog", "[", 
       RowBox[{"2", ",", 
@@ -87,28 +66,29 @@ Cell[BoxData[{
       RowBox[{"2", ",", 
        FractionBox[
         RowBox[{"w5", "*", "w6"}], 
-        RowBox[{"w1", "*", "w2"}]]}], "]"}], "-", "\[IndentingNewLine]", 
+        RowBox[{"w1", "*", "w2"}]]}], "]"}], "+", "\[IndentingNewLine]", 
      RowBox[{"PolyLog", "[", 
       RowBox[{"2", ",", 
-       FractionBox["w7", "w1"]}], "]"}], "-", 
+       FractionBox["w7", "w1"]}], "]"}], "+", 
      RowBox[{"PolyLog", "[", 
       RowBox[{"2", ",", 
-       FractionBox["w8", "w2"]}], "]"}], "+", 
+       FractionBox["w8", "w2"]}], "]"}], "-", 
      RowBox[{"PolyLog", "[", 
       RowBox[{"2", ",", 
        FractionBox[
         RowBox[{"w7", "*", "w8"}], 
+        RowBox[{"w1", "*", "w2"}]]}], "]"}], "-", "\[IndentingNewLine]", 
+     RowBox[{"PolyLog", "[", 
+      RowBox[{"2", ",", 
+       FractionBox["w3", "w1"]}], "]"}], "-", 
+     RowBox[{"PolyLog", "[", 
+      RowBox[{"2", ",", 
+       FractionBox["w4", "w2"]}], "]"}], "+", 
+     RowBox[{"PolyLog", "[", 
+      RowBox[{"2", ",", 
+       FractionBox[
+        RowBox[{"w3", "*", "w4"}], 
         RowBox[{"w1", "*", "w2"}]]}], "]"}]}]}], ";"}], 
-  "\[IndentingNewLine]"}], "\[IndentingNewLine]", 
- RowBox[{
-  RowBox[{"I2", "=", 
-   RowBox[{"Log", "[", 
-    FractionBox["w9", "w2"], "]"}]}], ";"}], "\[IndentingNewLine]", 
- RowBox[{
-  RowBox[{
-   RowBox[{"I5", "=", 
-    RowBox[{"Log", "[", 
-     FractionBox["w9", "w1"], "]"}]}], ";"}], 
   "\[IndentingNewLine]"}], "\[IndentingNewLine]", 
  RowBox[{
   RowBox[{"I3", "=", 
@@ -122,22 +102,32 @@ Cell[BoxData[{
   "\[IndentingNewLine]"}], "\[IndentingNewLine]", 
  RowBox[{
   RowBox[{"I4", "=", 
-   RowBox[{"-", 
-    RowBox[{"Log", "[", 
-     FractionBox["w11", "w2"], "]"}]}]}], ";"}], "\[IndentingNewLine]", 
+   RowBox[{"Log", "[", 
+    FractionBox["w11", "w2"], "]"}]}], ";"}], "\[IndentingNewLine]", 
  RowBox[{
   RowBox[{
    RowBox[{"I7", "=", 
-    RowBox[{"-", 
-     RowBox[{"Log", "[", 
-      FractionBox["w11", "w1"], "]"}]}]}], ";"}], 
+    RowBox[{"Log", "[", 
+     FractionBox["w11", "w1"], "]"}]}], ";"}], 
   "\[IndentingNewLine]"}], "\[IndentingNewLine]", 
  RowBox[{
-  RowBox[{"I8", "=", "1"}], ";"}], "\[IndentingNewLine]", 
+  RowBox[{"I2", "=", 
+   RowBox[{"-", 
+    RowBox[{"Log", "[", 
+     FractionBox["w9", "w2"], "]"}]}]}], ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{
+   RowBox[{"I5", "=", 
+    RowBox[{"-", 
+     RowBox[{"Log", "[", 
+      FractionBox["w9", "w1"], "]"}]}]}], ";"}], 
+  "\[IndentingNewLine]"}], "\[IndentingNewLine]", 
  RowBox[{
   RowBox[{"I9", "=", "1"}], ";"}], "\[IndentingNewLine]", 
  RowBox[{
-  RowBox[{"I10", "=", 
+  RowBox[{"I10", "=", "1"}], ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"I8", "=", 
    RowBox[{"-", "1"}]}], ";"}]}], "Input",
  CellChangeTimes->{{3.979510561761807*^9, 3.979510655990514*^9}, {
   3.979510709939498*^9, 3.97951079060679*^9}, {3.979511552188315*^9, 
@@ -175,29 +165,6 @@ Cell[BoxData[{
       SuperscriptBox["w2", "n"]}]], "-", "\[IndentingNewLine]", 
     RowBox[{
      FractionBox["1", 
-      SuperscriptBox["w9", "n"]], 
-     RowBox[{"(", 
-      RowBox[{
-       FractionBox[
-        RowBox[{"JacobiP", "[", 
-         RowBox[{
-          RowBox[{"n", "-", "1"}], ",", "n", ",", 
-          RowBox[{"-", "n"}], ",", 
-          RowBox[{"1", "-", 
-           RowBox[{"2", 
-            RowBox[{"w3", "/", "w9"}]}]}]}], "]"}], 
-        SuperscriptBox["w2", "n"]], "+", 
-       FractionBox[
-        RowBox[{"JacobiP", "[", 
-         RowBox[{
-          RowBox[{"n", "-", "1"}], ",", "n", ",", 
-          RowBox[{"-", "n"}], ",", 
-          RowBox[{"1", "-", 
-           RowBox[{"2", 
-            RowBox[{"w4", "/", "w9"}]}]}]}], "]"}], 
-        SuperscriptBox["w1", "n"]]}], ")"}]}], "-", 
-    RowBox[{
-     FractionBox["1", 
       SuperscriptBox["w10", "n"]], 
      RowBox[{"(", 
       RowBox[{
@@ -218,7 +185,7 @@ Cell[BoxData[{
           RowBox[{"1", "-", 
            RowBox[{"2", 
             RowBox[{"w6", "/", "w10"}]}]}]}], "]"}], 
-        SuperscriptBox["w1", "n"]]}], ")"}]}], "+", 
+        SuperscriptBox["w1", "n"]]}], ")"}]}], "-", 
     RowBox[{
      FractionBox["1", 
       SuperscriptBox["w11", "n"]], 
@@ -241,54 +208,30 @@ Cell[BoxData[{
           RowBox[{"1", "-", 
            RowBox[{"2", 
             RowBox[{"w8", "/", "w11"}]}]}]}], "]"}], 
-        SuperscriptBox["w1", "n"]]}], ")"}]}]}]}], "\[IndentingNewLine]", 
-  "\[IndentingNewLine]"}], "\[IndentingNewLine]", 
- RowBox[{
-  RowBox[{
-   RowBox[{"I2$Int", "[", "n_", "]"}], ":=", 
-   RowBox[{
-    RowBox[{"-", 
-     FractionBox["w3", 
-      RowBox[{
-       SuperscriptBox["w2", "n"], 
-       SuperscriptBox["w9", 
-        RowBox[{"2", "n"}]]}]]}], 
-    RowBox[{"Sum", "[", 
-     RowBox[{
-      RowBox[{
-       RowBox[{"Binomial", "[", 
-        RowBox[{
-         RowBox[{"n", "+", "k"}], ",", "k"}], "]"}], 
-       SuperscriptBox["w2", "k"], "*", 
-       SuperscriptBox["w9", 
-        RowBox[{"n", "-", "k", "-", "1"}]]}], ",", 
-      RowBox[{"{", 
-       RowBox[{"k", ",", "0", ",", 
-        RowBox[{"n", "-", "1"}]}], "}"}]}], "]"}]}]}], 
-  ";"}], "\[IndentingNewLine]", 
- RowBox[{
-  RowBox[{
-   RowBox[{
-    RowBox[{"I5$Int", "[", "n_", "]"}], ":=", 
+        SuperscriptBox["w1", "n"]]}], ")"}]}], "+", 
     RowBox[{
-     RowBox[{"-", 
-      FractionBox["w4", 
-       RowBox[{
-        SuperscriptBox["w1", "n"], 
-        SuperscriptBox["w9", 
-         RowBox[{"2", "n"}]]}]]}], 
-     RowBox[{"Sum", "[", 
+     FractionBox["1", 
+      SuperscriptBox["w9", "n"]], 
+     RowBox[{"(", 
       RowBox[{
-       RowBox[{
-        RowBox[{"Binomial", "[", 
+       FractionBox[
+        RowBox[{"JacobiP", "[", 
          RowBox[{
-          RowBox[{"n", "+", "k"}], ",", "k"}], "]"}], 
-        SuperscriptBox["w1", "k"], "*", 
-        SuperscriptBox["w9", 
-         RowBox[{"n", "-", "k", "-", "1"}]]}], ",", 
-       RowBox[{"{", 
-        RowBox[{"k", ",", "0", ",", 
-         RowBox[{"n", "-", "1"}]}], "}"}]}], "]"}]}]}], ";"}], 
+          RowBox[{"n", "-", "1"}], ",", "n", ",", 
+          RowBox[{"-", "n"}], ",", 
+          RowBox[{"1", "-", 
+           RowBox[{"2", 
+            RowBox[{"w3", "/", "w9"}]}]}]}], "]"}], 
+        SuperscriptBox["w2", "n"]], "+", 
+       FractionBox[
+        RowBox[{"JacobiP", "[", 
+         RowBox[{
+          RowBox[{"n", "-", "1"}], ",", "n", ",", 
+          RowBox[{"-", "n"}], ",", 
+          RowBox[{"1", "-", 
+           RowBox[{"2", 
+            RowBox[{"w4", "/", "w9"}]}]}]}], "]"}], 
+        SuperscriptBox["w1", "n"]]}], ")"}]}]}]}], "\[IndentingNewLine]", 
   "\[IndentingNewLine]"}], "\[IndentingNewLine]", 
  RowBox[{
   RowBox[{
@@ -341,11 +284,12 @@ Cell[BoxData[{
   RowBox[{
    RowBox[{"I4$Int", "[", "n_", "]"}], ":=", 
    RowBox[{
-    FractionBox["w7", 
-     RowBox[{
-      SuperscriptBox["w2", "n"], 
-      SuperscriptBox["w11", 
-       RowBox[{"2", "n"}]]}]], 
+    RowBox[{"-", 
+     FractionBox["w7", 
+      RowBox[{
+       SuperscriptBox["w2", "n"], 
+       SuperscriptBox["w11", 
+        RowBox[{"2", "n"}]]}]]}], 
     RowBox[{"Sum", "[", 
      RowBox[{
       RowBox[{
@@ -364,11 +308,12 @@ Cell[BoxData[{
    RowBox[{
     RowBox[{"I7$Int", "[", "n_", "]"}], ":=", 
     RowBox[{
-     FractionBox["w8", 
-      RowBox[{
-       SuperscriptBox["w1", "n"], 
-       SuperscriptBox["w11", 
-        RowBox[{"2", "n"}]]}]], 
+     RowBox[{"-", 
+      FractionBox["w8", 
+       RowBox[{
+        SuperscriptBox["w1", "n"], 
+        SuperscriptBox["w11", 
+         RowBox[{"2", "n"}]]}]]}], 
      RowBox[{"Sum", "[", 
       RowBox[{
        RowBox[{
@@ -384,13 +329,49 @@ Cell[BoxData[{
   "\[IndentingNewLine]"}], "\[IndentingNewLine]", 
  RowBox[{
   RowBox[{
-   RowBox[{"I8$Int", "[", "n_", "]"}], ":=", 
-   FractionBox[
-    RowBox[{"Binomial", "[", 
+   RowBox[{"I2$Int", "[", "n_", "]"}], ":=", 
+   RowBox[{
+    FractionBox["w3", 
      RowBox[{
-      RowBox[{"2", "n"}], ",", "n"}], "]"}], 
-    SuperscriptBox["w9", 
-     RowBox[{"2", "n"}]]]}], ";"}], "\[IndentingNewLine]", 
+      SuperscriptBox["w2", "n"], 
+      SuperscriptBox["w9", 
+       RowBox[{"2", "n"}]]}]], 
+    RowBox[{"Sum", "[", 
+     RowBox[{
+      RowBox[{
+       RowBox[{"Binomial", "[", 
+        RowBox[{
+         RowBox[{"n", "+", "k"}], ",", "k"}], "]"}], 
+       SuperscriptBox["w2", "k"], "*", 
+       SuperscriptBox["w9", 
+        RowBox[{"n", "-", "k", "-", "1"}]]}], ",", 
+      RowBox[{"{", 
+       RowBox[{"k", ",", "0", ",", 
+        RowBox[{"n", "-", "1"}]}], "}"}]}], "]"}]}]}], 
+  ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{
+   RowBox[{
+    RowBox[{"I5$Int", "[", "n_", "]"}], ":=", 
+    RowBox[{
+     FractionBox["w4", 
+      RowBox[{
+       SuperscriptBox["w1", "n"], 
+       SuperscriptBox["w9", 
+        RowBox[{"2", "n"}]]}]], 
+     RowBox[{"Sum", "[", 
+      RowBox[{
+       RowBox[{
+        RowBox[{"Binomial", "[", 
+         RowBox[{
+          RowBox[{"n", "+", "k"}], ",", "k"}], "]"}], 
+        SuperscriptBox["w1", "k"], "*", 
+        SuperscriptBox["w9", 
+         RowBox[{"n", "-", "k", "-", "1"}]]}], ",", 
+       RowBox[{"{", 
+        RowBox[{"k", ",", "0", ",", 
+         RowBox[{"n", "-", "1"}]}], "}"}]}], "]"}]}]}], ";"}], 
+  "\[IndentingNewLine]"}], "\[IndentingNewLine]", 
  RowBox[{
   RowBox[{
    RowBox[{"I9$Int", "[", "n_", "]"}], ":=", 
@@ -403,12 +384,21 @@ Cell[BoxData[{
  RowBox[{
   RowBox[{
    RowBox[{"I10$Int", "[", "n_", "]"}], ":=", 
+   FractionBox[
+    RowBox[{"Binomial", "[", 
+     RowBox[{
+      RowBox[{"2", "n"}], ",", "n"}], "]"}], 
+    SuperscriptBox["w11", 
+     RowBox[{"2", "n"}]]]}], ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{
+   RowBox[{"I8$Int", "[", "n_", "]"}], ":=", 
    RowBox[{"-", 
     FractionBox[
      RowBox[{"Binomial", "[", 
       RowBox[{
        RowBox[{"2", "n"}], ",", "n"}], "]"}], 
-     SuperscriptBox["w11", 
+     SuperscriptBox["w9", 
       RowBox[{"2", "n"}]]]}]}], ";"}]}], "Input",
  CellChangeTimes->{{3.979575606032707*^9, 3.979575730816799*^9}, {
    3.9795758778967857`*^9, 3.979575880113023*^9}, {3.979577165773313*^9, 
@@ -432,22 +422,3 @@ StyleDefinitions->"Default.nb",
 ExpressionUUID->"0b6ce59d-f0a6-45ad-8aeb-e3878771b5ad"
 ]
 (* End of Notebook Content *)
-
-(* Internal cache information *)
-(*CellTagsOutline
-CellTagsIndex->{}
-*)
-(*CellTagsIndex
-CellTagsIndex->{}
-*)
-(*NotebookFileOutline
-Notebook[{
-Cell[558, 20, 1380, 31, 262, "Input",ExpressionUUID->"a7a718cf-440a-4c47-a515-0bc4c0d3f3e9"],
-Cell[1941, 53, 222, 5, 30, "Input",ExpressionUUID->"cb195884-ca0f-4abd-9ccc-955b6bb718a2"],
-Cell[2166, 60, 3446, 94, 512, "Input",ExpressionUUID->"b1cfb812-d62d-4ec4-8763-0b5ba41b8c62"],
-Cell[5615, 156, 364, 8, 30, "Input",ExpressionUUID->"54c6590f-4daa-4360-95d2-dedf73623963"],
-Cell[5982, 166, 8329, 259, 660, "Input",ExpressionUUID->"63d1904e-6bb4-4413-956d-ee17e23ad5ae"]
-}
-]
-*)
-

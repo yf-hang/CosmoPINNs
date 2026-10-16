@@ -1,3 +1,4 @@
+# Empty-subset-first convention: S0={}, S1={y1}, S2={c}.
 import math
 from concurrent.futures import ProcessPoolExecutor
 
@@ -58,16 +59,16 @@ def _build_ws_tensor(x_coll: torch.Tensor, *, cy_val: float):
 
     w1 = x1 + y1 + c
     w2 = x2 + y1 + c
-    w3 = x1 + y1 - c
-    w4 = x2 + y1 - c
-    w5 = x1 - y1 + c
-    w6 = x2 - y1 + c
-    w7 = x1 - y1 - c
-    w8 = x2 - y1 - c
-    w9 = x1 + x2 + 2.0 * y1
-    w10 = x1 + x2 + 2.0 * c
-    w11 = x1 + x2
-    return w1, w2, w3, w4, w5, w6, w7, w8, w9, w10, w11
+    w3 = x1 - y1 - c
+    w4 = x2 - y1 - c
+    w5 = x1 + y1 - c
+    w6 = x2 + y1 - c
+    w7 = x1 - y1 + c
+    w8 = x2 - y1 + c
+    w9 = x1 + x2
+    w10 = x1 + x2 + 2.0 * y1
+    w11 = x1 + x2 + 2.0 * c
+    return (w1, w2, w3, w4, w5, w6, w7, w8, w9, w10, w11)
 
 
 def _polylog2_complex_np(z):
@@ -100,51 +101,50 @@ def _fast_p1_target_eps0(
     c = float(cy_val)
 
     w1 = x1 + y1 + c
-    w2 = x2 + y1 + c
-    w3 = x1 + y1 - c
-    w4 = x2 + y1 - c
-    w5 = x1 - y1 + c
-    w6 = x2 - y1 + c
-    w7 = x1 - y1 - c
-    w8 = x2 - y1 - c
-    w9 = x1 + x2 + 2.0 * y1
-    w10 = x1 + x2 + 2.0 * c
-    w11 = x1 + x2
-
     w1c = np.asarray(w1, dtype=np.complex128)
+    w2 = x2 + y1 + c
     w2c = np.asarray(w2, dtype=np.complex128)
+    w3 = x1 - y1 - c
     w3c = np.asarray(w3, dtype=np.complex128)
+    w4 = x2 - y1 - c
     w4c = np.asarray(w4, dtype=np.complex128)
+    w5 = x1 + y1 - c
     w5c = np.asarray(w5, dtype=np.complex128)
+    w6 = x2 + y1 - c
     w6c = np.asarray(w6, dtype=np.complex128)
+    w7 = x1 - y1 + c
     w7c = np.asarray(w7, dtype=np.complex128)
+    w8 = x2 - y1 + c
     w8c = np.asarray(w8, dtype=np.complex128)
+    w9 = x1 + x2
     w9c = np.asarray(w9, dtype=np.complex128)
+    w10 = x1 + x2 + 2.0 * y1
     w10c = np.asarray(w10, dtype=np.complex128)
+    w11 = x1 + x2 + 2.0 * c
     w11c = np.asarray(w11, dtype=np.complex128)
 
     i1 = (
         -(np.pi ** 2) / 6.0
-        + _polylog2_complex_np(w3c / w1c)
-        + _polylog2_complex_np(w4c / w2c)
-        - _polylog2_complex_np((w3c * w4c) / (w1c * w2c))
         + _polylog2_complex_np(w5c / w1c)
         + _polylog2_complex_np(w6c / w2c)
         - _polylog2_complex_np((w5c * w6c) / (w1c * w2c))
-        - _polylog2_complex_np(w7c / w1c)
-        - _polylog2_complex_np(w8c / w2c)
-        + _polylog2_complex_np((w7c * w8c) / (w1c * w2c))
+        + _polylog2_complex_np(w7c / w1c)
+        + _polylog2_complex_np(w8c / w2c)
+        - _polylog2_complex_np((w7c * w8c) / (w1c * w2c))
+        - _polylog2_complex_np(w3c / w1c)
+        - _polylog2_complex_np(w4c / w2c)
+        + _polylog2_complex_np((w3c * w4c) / (w1c * w2c))
     )
-    i2 = np.log(w9c / w2c)
+    i2 = -np.log(w9c / w2c)
     i3 = np.log(w10c / w2c)
-    i4 = -np.log(w11c / w2c)
-    i5 = np.log(w9c / w1c)
+    i4 = np.log(w11c / w2c)
+    i5 = -np.log(w9c / w1c)
     i6 = np.log(w10c / w1c)
-    i7 = -np.log(w11c / w1c)
+    i7 = np.log(w11c / w1c)
     ones = np.ones_like(w1c)
-    i8 = ones
+    i8 = -ones
     i9 = ones
-    i10 = -ones
+    i10 = ones
 
     function_complex = np.stack((i1, i2, i3, i4, i5, i6, i7, i8, i9, i10), axis=1)
     function_concat = _complex_to_output_channels(function_complex, output_part=output_part)
@@ -162,7 +162,7 @@ def _fast_p1_target_negative_int(
     if n is None:
         raise ValueError(f"Fast 1-loop negative-integer target path expects eps=-n, got eps={eps_val}.")
 
-    w1, w2, w3, w4, w5, w6, w7, w8, w9, w10, w11 = _build_ws_tensor(x_coll, cy_val=cy_val)
+    (w1, w2, w3, w4, w5, w6, w7, w8, w9, w10, w11) = _build_ws_tensor(x_coll, cy_val=cy_val)
     comb_2n_n = float(math.comb(2 * n, n))
 
     def _int_series_sum(w_main, w_main2):
@@ -171,27 +171,27 @@ def _fast_p1_target_negative_int(
             acc = acc + float(math.comb(n + k, k)) * torch.pow(w_main, k) * torch.pow(w_main2, n - k - 1)
         return acc
 
-    s29 = _int_series_sum(w2, w9)
-    s19 = _int_series_sum(w1, w9)
     s210 = _int_series_sum(w2, w10)
     s110 = _int_series_sum(w1, w10)
     s211 = _int_series_sum(w2, w11)
     s111 = _int_series_sum(w1, w11)
+    s29 = _int_series_sum(w2, w9)
+    s19 = _int_series_sum(w1, w9)
 
-    i2 = -(w3 / (torch.pow(w2, n) * torch.pow(w9, 2 * n))) * s29
-    i5 = -(w4 / (torch.pow(w1, n) * torch.pow(w9, 2 * n))) * s19
+    i2 = (w3 / (torch.pow(w2, n) * torch.pow(w9, 2 * n))) * s29
     i3 = -(w5 / (torch.pow(w2, n) * torch.pow(w10, 2 * n))) * s210
+    i4 = -(w7 / (torch.pow(w2, n) * torch.pow(w11, 2 * n))) * s211
+    i5 = (w4 / (torch.pow(w1, n) * torch.pow(w9, 2 * n))) * s19
     i6 = -(w6 / (torch.pow(w1, n) * torch.pow(w10, 2 * n))) * s110
-    i4 = (w7 / (torch.pow(w2, n) * torch.pow(w11, 2 * n))) * s211
-    i7 = (w8 / (torch.pow(w1, n) * torch.pow(w11, 2 * n))) * s111
-    i8 = comb_2n_n / torch.pow(w9, 2 * n)
+    i7 = -(w8 / (torch.pow(w1, n) * torch.pow(w11, 2 * n))) * s111
+    i8 = -comb_2n_n / torch.pow(w9, 2 * n)
     i9 = comb_2n_n / torch.pow(w10, 2 * n)
-    i10 = -comb_2n_n / torch.pow(w11, 2 * n)
+    i10 = comb_2n_n / torch.pow(w11, 2 * n)
     i1 = (
         1.0 / (torch.pow(w1, n) * torch.pow(w2, n))
-        + (i2 + i5 - i8)
         + (i3 + i6 - i9)
         + (i4 + i7 - i10)
+        + (i2 + i5 - i8)
     )
 
     re_vals = torch.stack((i1, i2, i3, i4, i5, i6, i7, i8, i9, i10), dim=1)
@@ -469,7 +469,7 @@ def build_inputs_and_boundary_1loop(
     bc_complex = compute_boundary_values_rescaled_1loop(quad_b, cy_val)
 
     # Filter out boundary points where analytic values are non-finite
-    # (e.g. points on singular letters such as w7=0 or w8=0).
+    # (e.g. points on singular letters such as w3=0 or w4=0).
     re_bc = np.real(bc_complex)
     im_bc = np.imag(bc_complex)
     finite_mask = np.isfinite(re_bc).all(axis=1) & np.isfinite(im_bc).all(axis=1)

@@ -43,6 +43,51 @@ $$
 w_1 = X_1+Y_1,\quad\ w_2 = X_2+Y_1, \quad\ w_3 = X_1-Y_1,\quad\ w_4 = X_2-Y_1, \quad\ w_5 = X_1+X_2
 $$
 
+### Basis and letter order
+
+The loop solutions, connection matrices, and boundary targets use the manuscript's
+empty-subset-first convention, with $S_0=\varnothing$. The remaining subsets are
+$\{Y_1\},\{Y_2\}$ for the bubble, and
+$\{Y_1\},\{Y_2\},\{Y_3\},\{Y_1,Y_2\},\{Y_1,Y_3\},\{Y_2,Y_3\}$ for the sunset.
+In the code, the last internal energy is fixed to `c`/`cy_val`.
+The chain ordering is unchanged; all signs and normalizations are retained.
+
+The following lists give the **old 1-based indices in the new order**:
+
+| System | Solutions | Letters |
+| --- | --- | --- |
+| Bubble | `1,4,2,3,7,5,6,10,8,9` | `1,2,7,8,3,4,5,6,11,9,10` |
+| Sunset | `1,8,2,3,4,5,6,7,15,9,10,11,12,13,14,22,16,17,18,19,20,21` | `1,2,15,16,3,4,5,6,7,8,9,10,11,12,13,14,23,17,18,19,20,21,22` |
+
+Thus $I_{\mathrm{new}}=P I_{\mathrm{old}}$ and
+$A_{\mathrm{new}}=P A_{\mathrm{old}}P^{\mathsf T}$, with the letters relabelled as
+above. This simultaneous permutation preserves the sparse coefficient pattern in
+`mat_data_1loop.py` and `mat_data_2loop.py`. In particular, $I_1$ is unchanged.
+The matching Mathematica solution notebooks use the same new labels.
+
+Analytic targets currently support $\varepsilon=0,\pm n$ ($n\geq1$) for the chain
+and sunset, and $\varepsilon=0,-n$ for the bubble. Bubble targets at positive
+integers have not been implemented; `main_core.py` disables Phase 1 for those
+values. The manuscript's positive-integer benchmark ($\varepsilon=+5$) uses the
+chain and sunset. `tests/test_integer_solutions.py` independently compares the
+implemented branches with the manuscript's finite-sum formulas for $n=1,\ldots,8$,
+including the $I_1$ combination, homogeneity, CDEs, and boundary targets.
+
+New checkpoints and evaluation bundles saved by `main_core.py` carry
+`basis_order="empty_first_v1"`. On loading, artifacts without this field (including
+raw state dictionaries) are treated as legacy: loop output heads and boundary
+target columns are reordered in memory. Existing files are not rewritten.
+When saving checkpoints outside this workflow, include the same `basis_order`
+field alongside `model_state_dict` to avoid treating new weights as legacy.
+Random loop output heads are also permuted, preserving the physical initialization
+for a fixed seed. Training remains equivalent up to floating-point roundoff.
+
+Run the ordering and CDE consistency checks from the project root:
+
+```bash
+python -m unittest discover -s tests -v
+```
+
 ### Neural Networks
 <table>
   <tr>

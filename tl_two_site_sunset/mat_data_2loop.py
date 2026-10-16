@@ -1,3 +1,6 @@
+# Empty-subset-first convention: S0={}, S1={y1}, S2={y2}, S3={c}, S4={y1,y2}, S5={y1,c}, S6={y2,c}.
+# a_k multiplies dlog(w_k) in the new I basis (also for a_k_eps0).
+# The simultaneous basis/letter permutation leaves these sparse entries unchanged.
 import torch
 
 _DTYPE = torch.float32
