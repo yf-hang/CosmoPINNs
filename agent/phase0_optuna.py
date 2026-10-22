@@ -7,8 +7,8 @@ The repository phase convention is:
     Phase 1 = transfer to 1 loop
     Phase 2 = transfer to 2 loops
 
-This tuner keeps the Phase 0 learning rate fixed from config.json and searches
-only lambda1, while lambda2 remains fixed from config.json.
+This tuner keeps the Phase 0 learning rate fixed from config2.json and searches
+only lambda1, while lambda2 remains fixed from the selected base configuration.
 
 The Optuna objective gives every Phase 0 output component equal weight:
 for each output j it computes ||pred_j - target_j||_2 / ||target_j||_2 over
@@ -39,7 +39,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from lib.loss import boundary_loss, cde_residual_loss_fixed_eps  # noqa: E402
+from lib.loss import LOSS_DEFINITION, boundary_loss, cde_residual_loss_fixed_eps  # noqa: E402
 from lib.pinn_models import PinnModel  # noqa: E402
 from two_site_chain.coll_bc import (  # noqa: E402
     build_inputs_and_boundary,
@@ -460,7 +460,7 @@ def _write_trials_csv(study: Any, path: Path) -> None:
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--base-config", type=Path, default=REPO_ROOT / "config.json")
+    parser.add_argument("--base-config", type=Path, default=REPO_ROOT / "config2.json")
     parser.add_argument(
         "--tune-config",
         type=Path,
@@ -562,6 +562,7 @@ def main() -> None:
         load_if_exists=True,
     )
     signature = {
+        "loss_definition": LOSS_DEFINITION,
         "eps_global": float(base["eps_global"]),
         "output_part": output_part,
         "domain": [

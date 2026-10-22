@@ -51,6 +51,21 @@ class Config:
         if self.device == "auto":
             self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
+        # A minimal config uses physical solution values and ordinary BC MSE.
+        # Keep explicit legacy opt-ins independent for existing config files.
+        self.use_solution_scale = _to_bool(
+            data.get("use_solution_scale", False), default=False
+        )
+        self.use_bc_channel_normalization = _to_bool(
+            data.get("use_bc_channel_normalization", False), default=False
+        )
+        self.bc_loss_use_normalized = self.use_bc_channel_normalization
+        if not self.use_solution_scale:
+            self.solution_scale_mode = "manual"
+            self.solution_scale_p0 = 1.0
+            self.solution_scale_p1 = 1.0
+            self.solution_scale_p2 = 1.0
+
     def __repr__(self):
         return json.dumps(self.__dict__, indent=2)
 
@@ -539,8 +554,10 @@ def _save_config_snapshot(config_path: str, eps_global):
     return cfg_out_abs, cfg_out_short
 
 
-def main():
-    bootstrap_cfg_path = "config.json"
+def main(config_path=None):
+    bootstrap_cfg_path = os.fspath(config_path) if config_path is not None else os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "config2.json"
+    )
     if not os.path.isfile(bootstrap_cfg_path):
         raise FileNotFoundError(f"Config bootstrap file not found: {bootstrap_cfg_path}")
 
@@ -548,7 +565,10 @@ def main():
         bootstrap_cfg = json.load(f)
 
     use_local_cfg = _to_bool(bootstrap_cfg.get("use_local_config", False), default=False)
-    cfg_path = "config_local_test.json" if use_local_cfg else bootstrap_cfg_path
+    cfg_path = (
+        os.path.join(os.path.dirname(bootstrap_cfg_path), "config_local_test.json")
+        if use_local_cfg else bootstrap_cfg_path
+    )
     if use_local_cfg and (not os.path.isfile(cfg_path)):
         raise FileNotFoundError(
             f"use_local_config=True but local config file not found: {cfg_path}"
@@ -565,7 +585,6 @@ def main():
     enable_phase1 = _to_bool(getattr(cfg, "enable_phase1", True), default=True)
     enable_phase2 = _to_bool(getattr(cfg, "enable_phase2", False), default=False)
 
-    normalized_bc = _to_bool(getattr(cfg, "normalized_bc", True), default=True)
     train_two_phase_only = _to_bool(getattr(cfg, "train_two_phase_only", False), default=False)
     run_phase1_only = _to_bool(getattr(cfg, "run_phase1_only", False), default=False)
     run_phase2_only = _to_bool(getattr(cfg, "run_phase2_only", False), default=False)
@@ -601,7 +620,7 @@ def main():
         p1_solution_scale_min = 1e-30
     if p2_solution_scale_min <= 0.0:
         p2_solution_scale_min = 1e-30
-    bc_loss_use_normalized = _to_bool(getattr(cfg, "bc_loss_use_normalized", True), default=True)
+    bc_loss_use_normalized = cfg.use_bc_channel_normalization
     bc_loss_scale_floor = float(getattr(cfg, "bc_loss_scale_floor", 1e-4))
     bc_loss_min_scale_ratio = float(getattr(cfg, "bc_loss_min_scale_ratio", 1.0))
     bc_loss_abs_mse_weight = float(getattr(cfg, "bc_loss_abs_mse_weight", 0.05))
@@ -709,13 +728,6 @@ def main():
             p0_model_load_path = None
             p0_history_load_path = None
             p0_eval_bundle_load_path = None
-
-    if not normalized_bc:
-        solution_scale_mode = "manual"
-        p0_solution_scale = 1.0
-        p1_solution_scale = 1.0
-        p2_solution_scale = 1.0
-        bc_loss_use_normalized = False
 
     p0_bc_cfg = getattr(cfg, "coll_bc", {})
     if not isinstance(p0_bc_cfg, dict):
@@ -866,7 +878,8 @@ def main():
     print(f"[Mode] phase0 output part: {p0_output_part_label}")
     print(f"[Mode] phase1 output part: {p1_output_part_label}")
     print(f"[Mode] phase2 output part: {p2_output_part_label}")
-    print(f"[Mode] normalized BC mode: {normalized_bc}")
+    print(f"[Mode] solution scaling enabled: {cfg.use_solution_scale}")
+    print(f"[Mode] BC channel normalization: {bc_loss_use_normalized}")
     print(f"[Mode] run phase1 only: {run_phase1_only}")
     print(f"[Mode] run phase2 only: {run_phase2_only}")
 
@@ -895,27 +908,29 @@ def main():
     boundary_loss_cfg_p1 = make_boundary_loss_cfg(p1_output_part)
     boundary_loss_cfg_p2 = make_boundary_loss_cfg(p2_output_part)
 
-    print(
-        "[Mode] BC loss: "
-        f"{'normalized' if bc_loss_use_normalized else 'absolute-mse'}, "
-        f"scale_floor={bc_loss_scale_floor:g}, "
-        f"min_scale_ratio={bc_loss_min_scale_ratio:g}, "
-        f"abs_mse_weight={bc_loss_abs_mse_weight:g}"
-    )
+    print("[Mode] CDE loss: mean squared residual over points, coordinates, and components")
+    if bc_loss_use_normalized:
+        print(
+            "[Mode] BC loss: channel-normalized, "
+            f"scale_floor={bc_loss_scale_floor:g}, "
+            f"min_scale_ratio={bc_loss_min_scale_ratio:g}, "
+            f"abs_mse_weight={bc_loss_abs_mse_weight:g}"
+        )
+    else:
+        print("[Mode] BC loss: ordinary MSE over points and components")
     print(
         "[Mode] loss weights: "
         f"manual, lambda1={float(cfg.lambda1):g}, lambda2={float(cfg.lambda2):g}"
     )
-    print(
-        "[Mode] solution scaling: "
-        f"mode={solution_scale_mode}, "
-        f"P0={p0_solution_scale:g}, "
-        f"P1={p1_solution_scale:g}, "
-        f"P2={p2_solution_scale:g}, "
-        f"ref_mean={solution_scale_ref_mean:g}, "
-        f"min(P0/P1/P2)=({p0_solution_scale_min:g}/{p1_solution_scale_min:g}/{p2_solution_scale_min:g}), "
-        f"max(P0/P1/P2)=({p0_solution_scale_max:g}/{p1_solution_scale_max:g}/{p2_solution_scale_max:g})"
-    )
+    if cfg.use_solution_scale:
+        print(
+            "[Mode] solution scaling: "
+            f"mode={solution_scale_mode}, "
+            f"P0={p0_solution_scale:g}, P1={p1_solution_scale:g}, P2={p2_solution_scale:g}, "
+            f"ref_mean={solution_scale_ref_mean:g}, "
+            f"min(P0/P1/P2)=({p0_solution_scale_min:g}/{p1_solution_scale_min:g}/{p2_solution_scale_min:g}), "
+            f"max(P0/P1/P2)=({p0_solution_scale_max:g}/{p1_solution_scale_max:g}/{p2_solution_scale_max:g})"
+        )
     print(f"[Mode] plot vector-L2 hist: {plot_vector_l2_hist}")
     print(
         "[Mode] grad-norm probe: "

@@ -123,6 +123,32 @@ $$
 
 with $\lambda_1$ and $\lambda_2$ being the corresponding weights.
 
+For a single trained sector (Re or Im), both losses are ordinary mean-squared
+errors in the original physical coordinates and solution components:
+
+$$
+L_{\mathrm{CDE}} = \frac{1}{N_C d n_I}
+\sum_{a=1}^{N_C}\sum_{k=1}^{d}\sum_{j=1}^{n_I}
+\left|\partial_{u_k}\hat I_j(u_a)
+- [C_k(u_a)\hat{\mathbf I}(u_a)]_j\right|^2,
+\qquad
+L_{\mathrm{BC}} = \frac{1}{N_B n_I}
+\sum_{b=1}^{N_B}\sum_{j=1}^{n_I}
+\left|\hat I_j(u_b)-I_j^{\mathrm{ref}}(u_b)\right|^2.
+$$
+
+Here $d=2,3,4$ and $n_I=4,10,22$ for P0/P1/P2, respectively.
+$C_k=\varepsilon A_k$ for nonzero $\varepsilon$; at $\varepsilon=0$ the
+existing finite-limit connection $C_k=\widehat A_k$ is used. The CDE loss
+retains averaging over coordinate directions and removes the old extra factor
+of $1/2$. The default BC loss has no channel RMS scaling, relative-error
+denominator, or normalized/absolute mixture, and solution scaling is disabled.
+
+`config2.json` retains the existing numerical weights `lambda1=120` and
+`lambda2=1`, and the existing `eps_global=-2`. These weights are inherited run
+settings, not newly tuned values for the revised domains and MSE convention.
+For a fixed residual, the new CDE MSE is twice the previous half-MSE.
+
 The code implements a three-phase hierarchy:
 
 | Phase | Topology | Inputs ($u_k$) dim | Outputs (Re($I_j$)) dim | Training role |
@@ -161,9 +187,9 @@ Collocation points:
 
 | $\ell$ | Collocation domain | Fixed scale | Collocation points | Boundary points | Epochs |
 | --- | --- | ---: | ---: | ---: | ---: |
-| 0 | `[20,30] x [20,30]` | `c0 = 15` | `5e4` | `5e3` | `6000` |
-| 1 | `[30,40] x [30,40] x [15,20]` | `c1 = 5` | `1e5` | `1e4` | `8000` |
-| 2 | `[50,60] x [50,60] x [20,25] x [10,15]` | `c2 = 5` | `1.5e5` | `1.7e4` | `10000` |
+| 0 | `[60,70] x [60,70]` | `c0 = 15` | `5e4` | `5e3` | `6000` |
+| 1 | `[14,16] x [14,16] x [4,6]` | `c1 = 5` | `1e5` | `1e4` | `8000` |
+| 2 | `[9,11] x [9,11] x [4,6] x [4,6]` | `c2 = 5` | `1.5e5` | `1.7e4` | `10000` |
 
 The benchmark values of $\varepsilon$ are:
 
@@ -201,7 +227,8 @@ Here all norms are evaluated at a single point $\vec{u}_i$ and are taken over th
 ```text
 |-- main.py                         # Configuration-driven training entry point
 |-- main_core.py                    # Core Phase-0/1/2 training implementation
-|-- config.json                     # Default run configuration
+|-- config2.json                    # Clean default configuration and revised domains
+|-- config.json                     # Previous configuration, kept for explicit use
 |-- lib/
 |   |-- pinn_models.py              # PINN and transfer-PINN models
 |   |-- loss.py                     # CDE and BC losses
@@ -227,11 +254,15 @@ Here all norms are evaluated at a single point $\vec{u}_i$ and are taken over th
 
 ## Running Training
 
-Edit `config.json`, then launch:
+Edit `config2.json`, then launch:
 
 ```bash
 python main.py
 ```
+
+Select a different configuration explicitly with `python main.py --config config.json`.
+The training core, Optuna tuner, adaptive-weight experiment, and CosmoAgent all
+default to `config2.json`; the two experiment scripts also accept `--base-config`.
 
 Important configuration fields:
 
@@ -240,20 +271,22 @@ Important configuration fields:
 | `device` | `auto`, `cpu`, or `cuda` |
 | `eps_global` | fixed $\varepsilon$ value for the run |
 | `enable_phase1`, `enable_phase2` | select the transfer target; only one can run in a single execution |
-| `run_phase1_only`, `run_phase2_only` | skip Phase-1 training and load an existing Phase-1 checkpoint |
+| `run_phase1_only`, `run_phase2_only` | skip P0 training and load an existing P0 checkpoint for the selected transfer target |
 | `phase*_output_part` | `Re` or `Im`; real and imaginary sectors are trained separately |
 | `lambda1`, `lambda2` | CDE and boundary loss weights |
 | `use_solution_scale` | enable/disable one global solution scale applied to all output channels |
 | `use_bc_channel_normalization` | enable/disable per-output-channel normalization inside the BC loss |
 | `phase*_model_load_path` | explicit checkpoint path for transfer or evaluation |
 
-`use_solution_scale` and `use_bc_channel_normalization` are independent switches.
-With the current default configuration both are `false`: targets are not globally
-rescaled (`solution_scale = 1`), and the BC loss is the absolute mean-squared
-error without per-channel normalization.
+`config2.json` omits solution-scaling and BC-normalization settings, the unused
+`scheduler_type`, inactive reuse switches, and empty checkpoint paths. Missing
+normalization switches default to `false`, including when calling `main_core`
+directly: targets use `solution_scale = 1` and BC uses ordinary MSE. The optional
+`use_solution_scale` and `use_bc_channel_normalization` switches remain
+independent explicit opt-ins for older configurations.
 
-If `use_local_config` is set to `true` in `config.json`, `main.py` loads
-`config_local_test.json` instead.
+If `use_local_config` is explicitly set to `true` in the selected configuration,
+`main.py` loads `config_local_test.json` from that configuration's directory.
 
 Generated artifacts are written under `results/` by default, or
 `results_local_test/` when local-test mode is enabled. Each run stores
@@ -296,19 +329,21 @@ python agent/phase0_optuna.py
 ### Search setup
 
 Optuna searches only $\lambda_1$. The Phase-0 learning rate
-`learning_rate_p0` and $\lambda_2$ remain fixed by the root `config.json`.
+`learning_rate_p0` and $\lambda_2$ remain fixed by the selected base configuration
+(`config2.json` by default).
 The search range, trial count, validation sampling, and pruning settings are
 configured in `agent/phase0_optuna_config.json`.
 
-The tuner reads the same two independent switches from `config.json`:
+The tuner supports the same two independent opt-in switches, both omitted from
+`config2.json` and disabled by default:
 
 - `use_solution_scale=false` keeps the global solution scale equal to 1;
 - `use_bc_channel_normalization=false` makes $L_{\mathrm{BC}}$ the absolute MSE.
 
-The current Optuna study name/output directory contains `noscale_raw_bc` so
-trials produced with the previous normalization definition are not mixed with
-this raw-BC search. Changing either normalization switch changes the training
-problem and therefore requires a separate study.
+The current Optuna study name/output directory contains `raw_mse_v2`. The study
+signature also records the loss definition, so trials using the previous
+half-MSE or domains cannot be reused as current results. Changing either
+normalization switch changes the training problem and requires a separate study.
 
 ### Validation objective
 
@@ -366,7 +401,7 @@ python agent/cosmo_agent.py
 ```
 
 CosmoAgent resolves the Phase-0 study automatically from the current root
-`config.json` and `agent/phase0_optuna_config.json`, including the epsilon tag,
+`config2.json` and `agent/phase0_optuna_config.json`, including the epsilon tag,
 study name, and SQLite output path.
 
 ### Study inspection
@@ -426,13 +461,13 @@ back to the production configuration as follows:
 
 ```text
 best trial lambda1  -> lambda1
-learning_rate_p0    -> unchanged from config.json
-lambda2             -> unchanged from config.json
+learning_rate_p0    -> unchanged from config2.json
+lambda2             -> unchanged from config2.json
 ```
 
 The final run starts from a newly initialized model and retains the production
 collocation count, epoch count, network architecture, and physical settings
-from `config.json`. Before launch, CosmoAgent verifies compatibility between the
+from `config2.json`. Before launch, CosmoAgent verifies compatibility between the
 study and the current Phase-0 setup, including the background, output sector,
 domain, network structure, fixed learning rate, fixed `lambda2`, and objective
 definition.

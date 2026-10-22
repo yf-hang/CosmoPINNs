@@ -134,7 +134,7 @@ def _write_history_csv(path: Path, rows: list[dict[str, Any]]) -> None:
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--base-config", type=Path, default=REPO_ROOT / "config.json")
+    parser.add_argument("--base-config", type=Path, default=REPO_ROOT / "config2.json")
     parser.add_argument(
         "--test-config",
         type=Path,

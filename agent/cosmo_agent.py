@@ -24,7 +24,7 @@ from optuna.trial import FrozenTrial, TrialState
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent
-BASE_CONFIG_PATH = REPO_ROOT / "config.json"
+BASE_CONFIG_PATH = REPO_ROOT / "config2.json"
 PHASE0_OPTUNA_CONFIG_PATH = SCRIPT_DIR / "phase0_optuna_config.json"
 TRAINING_RUNS_DIR = SCRIPT_DIR / "training_runs"
 TRAINING_RUNNER_PATH = SCRIPT_DIR / "run_training_job.py"
@@ -599,10 +599,11 @@ def _validate_study_compatibility(study: optuna.Study, config: dict[str, Any]) -
     if not isinstance(signature, dict):
         raise RuntimeError(
             "The Optuna study has no phase0_signature, so its setup cannot be "
-            "verified against config.json."
+            "verified against config2.json."
         )
 
     expected = {
+        "loss_definition": "raw_mse_v2",
         "eps_global": float(config["eps_global"]),
         "output_part": _normalise_output_part(config.get("phase0_output_part", "re")),
         "domain": [
@@ -619,6 +620,7 @@ def _validate_study_compatibility(study: optuna.Study, config: dict[str, Any]) -
     }
     try:
         observed = {
+            "loss_definition": str(signature["loss_definition"]),
             "eps_global": float(signature["eps_global"]),
             "output_part": _normalise_output_part(signature["output_part"]),
             "domain": [float(value) for value in signature["domain"]],
@@ -740,7 +742,7 @@ def preview_cosmopinns_training(
         },
         "note": (
             "Final training starts from a new model. Only lambda1 comes from "
-            "Optuna; learning_rate_p0 and lambda2 remain fixed by config.json."
+            "Optuna; learning_rate_p0 and lambda2 remain fixed by config2.json."
         ),
     })
 
@@ -1035,7 +1037,7 @@ Scientific rules:
 - Never invent trials, objective values, parameters, metrics, or physical explanations.
 - Respect the study's MINIMIZE/MAXIMIZE direction.
 - The current Phase-0 tuner searches only lambda1. learning_rate_p0 and lambda2
-  are fixed by the root config.json and are not Optuna parameters.
+  are fixed by the root config2.json and are not Optuna parameters.
 - The Phase-0 objective is the equal-weight mean over outputs of
   ||prediction_j-target_j||_2 / ||target_j||_2. Lower is better.
 - A best trial is not automatically robust; do not claim robustness without
@@ -1048,7 +1050,7 @@ Scientific rules:
   start_cosmopinns_training. Do not merely describe shell commands.
 - The default training pipeline is phase0. Use phase0_phase1 or phase0_phase2
   only when the user explicitly requests that transfer stage.
-- phase0_epochs=0 means keep the production value from config.json.
+- phase0_epochs=0 means keep the production value from config2.json.
 - Use preview_cosmopinns_training when the user asks to inspect the effective
   configuration without launching work.
 - Training runs in the background; use get_training_status for progress or
@@ -1250,7 +1252,7 @@ def main() -> None:
         print("\nStartup error:")
         print(exc)
         print(
-            "\nCheck config.json and agent/phase0_optuna_config.json, and make "
+            "\nCheck config2.json and agent/phase0_optuna_config.json, and make "
             "sure the matching Phase-0 Optuna study has been created."
         )
         sys.exit(1)

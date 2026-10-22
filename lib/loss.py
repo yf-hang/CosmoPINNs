@@ -1,6 +1,9 @@
 import torch
 import torch.nn as nn
 
+# Included in tuning-study signatures so half-MSE trials cannot be reused.
+LOSS_DEFINITION = "raw_mse_v2"
+
 # -------------------------------------------------
 #  Compute gradients for complex outputs
 # -------------------------------------------------
@@ -180,9 +183,9 @@ def cde_residual_loss_fixed_eps(
 
     if not terms:
         raise RuntimeError("No residual terms computed. Check output_part and model output shape.")
-    # Average the per-coordinate CDE residuals so the loss scale is
-    # independent of the number of input variables (x1, x2, ...).
-    loss = 0.5 * torch.stack(terms).sum() / x_batch.shape[1]
+    # Ordinary MSE over collocation points, coordinates, and output components.
+    # Re and Im are trained separately; there is no extra factor of 1/2.
+    loss = torch.stack(terms).mean()
     Nc = x_batch.new_tensor(float(x_batch.shape[0]))
     return loss, Nc
 
@@ -268,9 +271,8 @@ def cde_residual_loss_fixed_eps_1loop(
 
     if not terms:
         raise RuntimeError("No residual terms computed. Check output_part and model output shape.")
-    # Average the per-coordinate CDE residuals so the loss scale is
-    # independent of the number of input variables (x1, x2, ...).
-    loss = 0.5 * torch.stack(terms).sum() / x_batch.shape[1]
+    # Ordinary MSE over collocation points, coordinates, and output components.
+    loss = torch.stack(terms).mean()
     Nc = x_batch.new_tensor(float(x_batch.shape[0]))
     return loss, Nc
 
@@ -375,9 +377,8 @@ def cde_residual_loss_fixed_eps_2loop(
 
     if not terms:
         raise RuntimeError("No residual terms computed. Check output_part and model output shape.")
-    # Average the per-coordinate CDE residuals so the loss scale is
-    # independent of the number of input variables (x1, x2, ...).
-    loss = 0.5 * torch.stack(terms).sum() / x_batch.shape[1]
+    # Ordinary MSE over collocation points, coordinates, and output components.
+    loss = torch.stack(terms).mean()
     Nc = x_batch.new_tensor(float(x_batch.shape[0]))
     return loss, Nc
 
@@ -416,12 +417,17 @@ def boundary_loss(
     x_b_tensor,
     bc_target,
     *,
-    use_normalized=True,
+    use_normalized=False,
     scale_floor=1e-4,
     min_scale_ratio=1.0,
     abs_mse_weight=0.05,
     output_part="re",
 ):
+    """Ordinary BC MSE by default; normalization requires an explicit opt-in.
+
+    With normalization disabled, this is sum((prediction - target)**2) / (Nb*nI)
+    on the original solution components, without RMS or relative-error weights.
+    """
     pred = model(x_b_tensor)
     diff = pred - bc_target
     abs_mse = diff.pow(2).mean()
