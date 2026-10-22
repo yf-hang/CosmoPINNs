@@ -114,7 +114,10 @@ errors in the original physical coordinates and solution components:
 $$
 L_{\mathrm{CDE}} = \frac{1}{N_C d n_I}
 \sum_{a=1}^{N_C}\sum_{k=1}^{d}\sum_{j=1}^{n_I}
-\left|\partial_{u_k}\hat I_j(u_a) - [C_k(u_a)\hat{\mathbf{I}}(u_a)]_j \right|^2,
+\left|\partial_{u_k}\hat I_j(u_a) - [C_k(u_a)\hat{\mathbf{I}}(u_a)]_j \right|^2, \qquad
+L_{\mathrm{BC}} = \frac{1}{N_B n_I}
+\sum_{b=1}^{N_B}\sum_{j=1}^{n_I}
+\left|\hat I_j(u_b)-I_j^{\mathrm{ref}}(u_b)\right|^2
 $$
 
 Here $d=2,3,4$ and $n_I=4,10,22$ for P0/P1/P2, respectively.
