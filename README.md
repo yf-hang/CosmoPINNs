@@ -144,10 +144,33 @@ retains averaging over coordinate directions and removes the old extra factor
 of $1/2$. The default BC loss has no channel RMS scaling, relative-error
 denominator, or normalized/absolute mixture, and solution scaling is disabled.
 
-`config2.json` retains the existing numerical weights `lambda1=120` and
-`lambda2=1`, and the existing `eps_global=-2`. These weights are inherited run
-settings, not newly tuned values for the revised domains and MSE convention.
-For a fixed residual, the new CDE MSE is twice the previous half-MSE.
+`config2.json` uses two-term gradient balancing in every phase. Both weights
+start at 1. For the unweighted losses, compute the parameter-gradient norms
+
+$$
+g_C=\|\nabla_\theta L_{\mathrm{CDE}}\|_2,\qquad
+g_B=\|\nabla_\theta L_{\mathrm{BC}}\|_2,\qquad
+\widehat\lambda_q=\frac{g_C+g_B}{g_q},\quad q\in\{C,B\}.
+$$
+
+At steps 1000, 2000, ... of each phase, before the optimizer update, apply
+
+$$
+\lambda_q\leftarrow0.9\lambda_q+0.1\widehat\lambda_q.
+$$
+
+The gradients include all currently trainable parameters (excluding the frozen
+transfer core), are measured before gradient clipping, and use the raw,
+unweighted losses. The weights are detached scalars: the total-loss backward
+pass does not differentiate through the weight update. If a term has exactly
+zero gradient, its previous weight is retained. Each phase initializes its own
+pair at `(1, 1)` and holds them fixed between updates; the first update is at
+step 1000. Logs and checkpoint metadata record the gradient norms and update
+steps. Loss-history `.npz` files also include `lambda1_history` and
+`lambda2_history`, the weights actually used at each step.
+
+`eps_global=-2` remains the default. `loss_weighting="fixed"` (also the fallback
+for older configs without this key) preserves the fixed-weight experiment mode.
 
 The code implements a three-phase hierarchy:
 
@@ -261,8 +284,10 @@ python main.py
 ```
 
 Select a different configuration explicitly with `python main.py --config config.json`.
-The training core, Optuna tuner, adaptive-weight experiment, and CosmoAgent all
-default to `config2.json`; the two experiment scripts also accept `--base-config`.
+The training core defaults to `config2.json` and applies gradient balancing to
+P0, P1, and P2. The separate fixed-weight Optuna and historical max/mean
+experiments accept `--base-config`; they reject the new adaptive configuration
+instead of silently substituting a different weighting rule.
 
 Important configuration fields:
 
@@ -273,7 +298,10 @@ Important configuration fields:
 | `enable_phase1`, `enable_phase2` | select the transfer target; only one can run in a single execution |
 | `run_phase1_only`, `run_phase2_only` | skip P0 training and load an existing P0 checkpoint for the selected transfer target |
 | `phase*_output_part` | `Re` or `Im`; real and imaginary sectors are trained separately |
-| `lambda1`, `lambda2` | CDE and boundary loss weights |
+| `loss_weighting` | `grad_norm` for two-term L2 gradient balancing; `fixed` for the legacy mode |
+| `lambda1`, `lambda2` | initial CDE and BC weights, both 1 in `config2.json` |
+| `loss_weight_update_every` | update interval in optimizer steps, 1000 |
+| `loss_weight_ema` | old-weight coefficient in the EMA, 0.9 |
 | `use_solution_scale` | enable/disable one global solution scale applied to all output channels |
 | `use_bc_channel_normalization` | enable/disable per-output-channel normalization inside the BC loss |
 | `phase*_model_load_path` | explicit checkpoint path for transfer or evaluation |
@@ -312,8 +340,9 @@ standard output location, `main.py` can infer the checkpoint path automatically.
 
 ## Hyperparameter Tuning (Ongoing)
 
-We use Optuna to tune selected training hyperparameters in a controlled,
-phase-specific workflow. The current implementation focuses on Phase 0 and
+The optional fixed-weight Optuna experiment tunes hyperparameters in a
+phase-specific workflow. This is separate from the default two-term gradient
+balancing in `main.py`. The experiment focuses on Phase 0 and
 optimizes the CDE loss weight $\lambda_1$ against a fixed validation set, while
 all other training and physical settings, including $\lambda_2$, remain fixed.
 Extending the tuning workflow to the loop-level phases is ongoing.
@@ -323,14 +352,14 @@ requirements and launch the study with:
 
 ```bash
 python -m pip install -r agent/requirements.txt
-python agent/phase0_optuna.py
+python agent/phase0_optuna.py --base-config config.json
 ```
 
 ### Search setup
 
 Optuna searches only $\lambda_1$. The Phase-0 learning rate
 `learning_rate_p0` and $\lambda_2$ remain fixed by the selected base configuration
-(`config2.json` by default).
+(use a fixed-weight config, such as the retained `config.json`).
 The search range, trial count, validation sampling, and pruning settings are
 configured in `agent/phase0_optuna_config.json`.
 
@@ -456,8 +485,12 @@ running.
 
 ### Training from the best Optuna trial
 
-When explicitly asked to start training, CosmoAgent maps the best Phase-0 trial
-back to the production configuration as follows:
+This best-trial workflow requires `loss_weighting="fixed"` in the production
+configuration. With the default `grad_norm` mode, CosmoAgent rejects this
+workflow so a fixed Optuna result cannot replace the agreed adaptive weights;
+launch the adaptive run with `python main.py`.
+
+In fixed mode, CosmoAgent maps the best Phase-0 trial to the configuration as follows:
 
 ```text
 best trial lambda1  -> lambda1

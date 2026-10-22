@@ -159,6 +159,12 @@ def _parse_args() -> argparse.Namespace:
 def main() -> None:
     args = _parse_args()
     base = _read_json(args.base_config.resolve())
+    if str(base.get("loss_weighting", "fixed")).strip().lower() != "fixed":
+        raise ValueError(
+            "This independent experiment uses the historical max/mean BC-weight "
+            "rule. Run main.py for config2.json's two-term L2 gradient balancing, "
+            "or use --base-config config.json for this historical experiment."
+        )
     test_cfg = _read_json(args.test_config.resolve())
 
     if args.device is not None:

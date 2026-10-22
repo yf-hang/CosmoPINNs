@@ -487,11 +487,17 @@ def _save_phase_artifacts(
         ckpt.update(extra_meta)
     ckpt["basis_order"] = BASIS_ORDER
     torch.save(ckpt, paths["model_abs"])
+    weight_history = {}
+    if isinstance(extra_meta, dict):
+        for key in ("lambda1_history", "lambda2_history"):
+            if key in extra_meta:
+                weight_history[key] = np.asarray(extra_meta[key], dtype=float)
     np.savez(
         paths["history_abs"],
         total=np.asarray(hist_tot, dtype=float),
         cde=np.asarray(hist_cde, dtype=float),
         bc=np.asarray(hist_bc, dtype=float),
+        **weight_history,
     )
     return paths
 
@@ -580,6 +586,11 @@ def main(config_path=None):
     print(json.dumps(loaded_cfg_dict, indent=2, ensure_ascii=False))
 
     cfg = Config(cfg_path)
+    loss_weight_options = dict(
+        loss_weighting=str(getattr(cfg, "loss_weighting", "fixed")).strip().lower(),
+        loss_weight_update_every=int(getattr(cfg, "loss_weight_update_every", 1000)),
+        loss_weight_ema=float(getattr(cfg, "loss_weight_ema", 0.9)),
+    )
     device = torch.device(cfg.device)
     eps_tag = _make_eps_tag(cfg.eps_global)
     enable_phase1 = _to_bool(getattr(cfg, "enable_phase1", True), default=True)
@@ -920,8 +931,15 @@ def main(config_path=None):
         print("[Mode] BC loss: ordinary MSE over points and components")
     print(
         "[Mode] loss weights: "
-        f"manual, lambda1={float(cfg.lambda1):g}, lambda2={float(cfg.lambda2):g}"
+        f"{loss_weight_options['loss_weighting']}, "
+        f"initial lambda1={float(cfg.lambda1):g}, lambda2={float(cfg.lambda2):g}"
     )
+    if loss_weight_options["loss_weighting"] == "grad_norm":
+        print(
+            "[Mode] weight updates: unweighted parameter-gradient L2 norms, "
+            f"every {loss_weight_options['loss_weight_update_every']} steps, "
+            f"EMA old-weight coefficient={loss_weight_options['loss_weight_ema']:g}"
+        )
     if cfg.use_solution_scale:
         print(
             "[Mode] solution scaling: "
@@ -1214,6 +1232,7 @@ def main(config_path=None):
             total_epochs=cfg.phase0_epochs,
             lam1=cfg.lambda1,
             lam2=cfg.lambda2,
+            **loss_weight_options,
             cosine_min_lr=cfg.cosine_min_lr,
             print_every=cfg.print_every,
             phase_name="P0",
@@ -1576,6 +1595,7 @@ def main(config_path=None):
                 total_epochs=cfg.phase1_epochs,
                 lam1=cfg.lambda1,
                 lam2=cfg.lambda2,
+                **loss_weight_options,
                 cosine_min_lr=cfg.cosine_min_lr,
                 print_every=cfg.print_every,
                 phase_name="P1",
@@ -2011,6 +2031,7 @@ def main(config_path=None):
                 total_epochs=phase2_epochs,
                 lam1=cfg.lambda1,
                 lam2=cfg.lambda2,
+                **loss_weight_options,
                 cosine_min_lr=cfg.cosine_min_lr,
                 print_every=cfg.print_every,
                 phase_name="P2",

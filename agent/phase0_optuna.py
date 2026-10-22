@@ -487,6 +487,12 @@ def main() -> None:
         ) from exc
 
     base = _read_json(args.base_config.resolve())
+    if str(base.get("loss_weighting", "fixed")).strip().lower() != "fixed":
+        raise ValueError(
+            "This Optuna experiment searches a fixed lambda1. For the configured "
+            "two-term gradient balancing, run main.py. To run the fixed-weight "
+            "experiment, select a fixed configuration with --base-config config.json."
+        )
     tune = _read_json(args.tune_config.resolve())
 
     if args.n_trials is not None:

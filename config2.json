@@ -78,6 +78,9 @@
   "postcalc_parallel_min_points": 5000,
   "save_phase_artifacts": true,
   "save_eval_bundle": true,
-  "lambda1": 120,
-  "lambda2": 1
+  "loss_weighting": "grad_norm",
+  "lambda1": 1,
+  "lambda2": 1,
+  "loss_weight_update_every": 1000,
+  "loss_weight_ema": 0.9
 }

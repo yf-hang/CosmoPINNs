@@ -658,6 +658,12 @@ def _build_training_config(
         raise ValueError("phase0_epochs must be zero or positive.")
 
     config = _read_json_object(BASE_CONFIG_PATH)
+    if str(config.get("loss_weighting", "fixed")).strip().lower() != "fixed":
+        raise ValueError(
+            "The best-Optuna-weight workflow requires loss_weighting='fixed'. "
+            "Run main.py to use config2.json's two-term gradient balancing; "
+            "its initial weights must not be replaced by a fixed Optuna result."
+        )
     study, trial = _best_training_trial()
     _validate_study_compatibility(study, config)
 
