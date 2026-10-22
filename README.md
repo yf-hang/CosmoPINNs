@@ -46,23 +46,9 @@ $$
 
 The loop solutions, connection matrices, and boundary targets use the manuscript's
 empty-subset-first convention, with $S_0=\varnothing$. The remaining subsets are
-$\\{Y_1,Y_2\\}$ for the bubble, and
-$\{Y_1\},\{Y_2\},\{Y_3\},\{Y_1,Y_2\},\{Y_1,Y_3\},\{Y_2,Y_3\}$ for the sunset.
+$\\{Y_1\\},\\{Y_2\\}$ for the bubble, and
+$\\{Y_1\\},\\{Y_2\\},\\{Y_3\\},\\{Y_1,Y_2\\},\\{Y_1,Y_3\\]},\\{Y_2,Y_3\\}$ for the sunset.
 In the code, the last internal energy is fixed to `c`/`cy_val`.
-The chain ordering is unchanged; all signs and normalizations are retained.
-
-The following lists give the **old 1-based indices in the new order**:
-
-| System | Solutions | Letters |
-| --- | --- | --- |
-| Bubble | `1,4,2,3,7,5,6,10,8,9` | `1,2,7,8,3,4,5,6,11,9,10` |
-| Sunset | `1,8,2,3,4,5,6,7,15,9,10,11,12,13,14,22,16,17,18,19,20,21` | `1,2,15,16,3,4,5,6,7,8,9,10,11,12,13,14,23,17,18,19,20,21,22` |
-
-Thus $I_{\mathrm{new}}=P I_{\mathrm{old}}$ and
-$A_{\mathrm{new}}=P A_{\mathrm{old}}P^{\mathsf T}$, with the letters relabelled as
-above. This simultaneous permutation preserves the sparse coefficient pattern in
-`mat_data_1loop.py` and `mat_data_2loop.py`. In particular, $I_1$ is unchanged.
-The matching Mathematica solution notebooks use the same new labels.
 
 Analytic targets currently support $\varepsilon=0,\pm n$ ($n\geq1$) for the chain
 and sunset, and $\varepsilon=0,-n$ for the bubble. Bubble targets at positive
