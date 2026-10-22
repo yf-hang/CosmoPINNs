@@ -47,7 +47,7 @@ $$
 The loop solutions, connection matrices, and boundary targets use the manuscript's
 empty-subset-first convention, with $S_0=\varnothing$. The remaining subsets are
 $\\{Y_1\\},\\{Y_2\\}$ for the bubble, and
-$\\{Y_1\\},\\{Y_2\\},\\{Y_3\\},\\{Y_1,Y_2\\},\\{Y_1,Y_3\\]},\\{Y_2,Y_3\\}$ for the sunset.
+$\\{Y_1\\},\\{Y_2\\},\\{Y_3\\},\\{Y_1,Y_2\\},\\{Y_1,Y_3\\},\\{Y_2,Y_3\\}$ for the sunset.
 In the code, the last internal energy is fixed to `c`/`cy_val`.
 
 Analytic targets currently support $\varepsilon=0,\pm n$ ($n\geq1$) for the chain
