@@ -21,7 +21,7 @@ where $𝒛=(X_1,X_2,\ldots,Y_1,Y_2,\ldots)$ is the set of all independent kinem
 Moreover, $A(𝒛)$ represents the connection matrix which can be further decomposed as
 
 $$
-A(𝒛) = \sum_{i=1}^{6 \cdot 2^{\ell}-1} a_i \ \mathrm{log} w_i(𝒛)
+A(𝒛) = \sum_{r=1}^{6 \cdot 2^{\ell}-1} a_r \ \mathrm{log} w_r(𝒛)
 $$
 
 where $a_i$ are constant matrices and $w_i(𝒛)$ are the symbol letters which are rational or algebraic functions of the kinematic variables. The complete set of $\\{w_i\\}$ is referred to as the alphabet. Here $\ell$ denotes the number of loop, such as $\ell=0$: chain (tree), $\ell=1$: 1-loop bubble, $\ell=2$: 2-loop sunset, and etc. For example, when $\ell=0$, connection matrix $A(𝒛)$ takes the following form:
@@ -114,12 +114,7 @@ errors in the original physical coordinates and solution components:
 $$
 L_{\mathrm{CDE}} = \frac{1}{N_C d n_I}
 \sum_{a=1}^{N_C}\sum_{k=1}^{d}\sum_{j=1}^{n_I}
-\left|\partial_{u_k}\hat I_j(u_a)
-- [C_k(u_a)\hat{\mathbf I}(u_a)]_j\right|^2,
-\qquad
-L_{\mathrm{BC}} = \frac{1}{N_B n_I}
-\sum_{b=1}^{N_B}\sum_{j=1}^{n_I}
-\left|\hat I_j(u_b)-I_j^{\mathrm{ref}}(u_b)\right|^2.
+\left|\partial_{u_k}\hat I_j(u_a) - [C_k(u_a)\hat{\mathbf{I}}(u_a)]_j \right|^2,
 $$
 
 Here $d=2,3,4$ and $n_I=4,10,22$ for P0/P1/P2, respectively.
